@@ -1,0 +1,70 @@
+{
+  "name": "my-app",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "start": "nodemon ./bin/www",
+    "electron": "electron main.js",
+    "build": "electron-builder --win --x64"
+  },
+  "main": "main.js",
+  "build": {
+    "appId": "com.myapp.tool",
+    "productName": "API Tool",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "files": [
+      "**/*",
+      "!node_modules/puppeteer/.local-chromium/**",
+      "!uploads/**",
+      "!dist/**",
+      "!.env",
+      "!*.log",
+      "!flow-profile/**",
+      "!agent-chrome-profile/**"
+    ],
+    "extraResources": [
+      {
+        "from": "flow-extension",
+        "to": "flow-extension"
+      }
+    ]
+  },
+  "dependencies": {
+    "@google/genai": "^1.43.0",
+    "axios": "^1.13.6",
+    "cookie-parser": "~1.4.4",
+    "debug": "~2.6.9",
+    "dotenv": "^17.3.1",
+    "ejs": "^4.0.1",
+    "express": "~4.16.1",
+    "fs": "^0.0.1-security",
+    "http-errors": "~1.6.3",
+    "https-proxy-agent": "^7.0.6",
+    "jade": "~1.11.0",
+    "morgan": "~1.9.1",
+    "multer": "^2.1.1",
+    "mysql": "^2.18.1",
+    "mysql2": "^3.19.0",
+    "nodemon": "^3.1.14",
+    "puppeteer": "^24.37.5",
+    "puppeteer-core": "^24.37.5",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "puppeteer-real-browser": "^1.4.4",
+    "sequelize": "^6.37.7",
+    "sharp": "^0.34.5",
+    "sql": "^0.78.0",
+    "xlsx": "^0.18.5",
+    "youtube-transcript": "^1.2.1"
+  },
+  "devDependencies": {
+    "electron": "^41.0.4",
+    "electron-builder": "^26.8.1",
+    "sequelize-cli": "^6.6.5"
+  }
+}

@@ -1,0 +1,5 @@
+{
+  "watch": ["routes", "controllers", "utils", "models", "views", "app.js"],
+  "ext": "js,json,ejs",
+  "ignore": ["uploads", "flow-profile", "chrome-profile", "node_modules"]
+}

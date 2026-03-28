@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gemini - Phân tích video YouTube</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20,400,0,0"/>
+  <style>
+    :root {
+      --bg-dark: #1a1c1e;
+      --card-bg: #212429;
+      --border-color: #3f444c;
+      --text-main: #e2e2e2;
+      --text-dim: #9aa0a6;
+      --accent-blue: #4d94ff;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      font-family: "Segoe UI", Roboto, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 20px;
+    }
+
+    nav {
+      width: 100%;
+      max-width: 800px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 40px;
+      flex-wrap: wrap;
+    }
+
+    .nav-brand {
+      font-size: 18px;
+      font-weight: bold;
+      color: white;
+      text-decoration: none;
+      margin-right: 16px;
+    }
+
+    nav a {
+      text-decoration: none;
+      color: var(--text-dim);
+      font-size: 14px;
+      padding: 6px 12px;
+      border-radius: 20px;
+      border: 1px solid transparent;
+      transition: all 0.2s;
+    }
+
+    nav a:hover { color: var(--text-main); border-color: var(--border-color); }
+    nav a.active { color: var(--accent-blue); border-color: var(--accent-blue); }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 32px;
+      width: 100%;
+      max-width: 800px;
+    }
+
+    h2 {
+      font-size: 20px;
+      margin-bottom: 24px;
+    }
+
+    label {
+      font-size: 13px;
+      color: var(--text-dim);
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    input, textarea {
+      width: 100%;
+      background: #131517;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      color: var(--text-main);
+      padding: 10px 14px;
+      font-size: 14px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    input:focus, textarea:focus { border-color: var(--accent-blue); }
+    textarea { height: 100px; resize: vertical; }
+
+    .field { margin-bottom: 20px; }
+
+    button[type="submit"] {
+      background: var(--accent-blue);
+      color: white;
+      border: none;
+      padding: 10px 28px;
+      border-radius: 24px;
+      font-size: 14px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: opacity 0.2s;
+    }
+
+    button[type="submit"]:hover { opacity: 0.85; }
+    button[type="submit"]:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    #result {
+      margin-top: 24px;
+      white-space: pre-wrap;
+      background: #131517;
+      border: 1px solid var(--border-color);
+      padding: 16px;
+      border-radius: 10px;
+      font-size: 14px;
+      line-height: 1.7;
+      display: none;
+    }
+
+    .loading { color: var(--text-dim); }
+  </style>
+</head>
+<body>
+
+  <nav>
+    <a href="/" class="nav-brand">API Tool</a>
+    <a href="/api">Text To Video</a>
+    <a href="/api/gemini" class="active">Gemini</a>
+    <a href="/api/imageToVideo">Image To Video</a>
+    <a href="/api/IngredientsToVideo">Ingredients To Video</a>
+  </nav>
+
+  <div class="card">
+    <h2>Phân tích video YouTube bằng Gemini</h2>
+    <form id="geminiForm">
+      <div class="field">
+        <label>URL YouTube</label>
+        <input type="text" name="youtubeUrl" placeholder="https://www.youtube.com/watch?v=..." required>
+      </div>
+
+      <div class="field">
+        <label>Prompt (tùy chọn)</label>
+        <textarea name="prompt" placeholder="Phân tích nội dung video này chi tiết bằng tiếng Việt."></textarea>
+      </div>
+
+      <button type="submit">
+        <span class="material-symbols-outlined" style="font-size:18px">auto_awesome</span>
+        Phân tích
+      </button>
+    </form>
+
+    <div id="result"></div>
+  </div>
+
+  <script>
+    document.getElementById("geminiForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const resultEl = document.getElementById("result");
+      const btn = e.target.querySelector("button[type='submit']");
+
+      resultEl.style.display = "block";
+      resultEl.textContent = "Đang phân tích...";
+      resultEl.className = "loading";
+      btn.disabled = true;
+
+      const form = new FormData(e.target);
+      const body = Object.fromEntries(form.entries());
+
+      try {
+        const res = await fetch("/api/gemini", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        resultEl.className = "";
+        resultEl.textContent = data.result || data.error;
+      } catch (err) {
+        resultEl.className = "";
+        resultEl.textContent = "Lỗi: " + err.message;
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

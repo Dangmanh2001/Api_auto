@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "Flow Agent",
+  "version": "1.0",
+  "description": "Automation agent cho Google Flow - chạy trực tiếp trên máy khách",
+  "permissions": ["tabs", "scripting", "storage", "debugger"],
+  "host_permissions": [
+    "http://192.168.1.89/*",
+    "http://localhost/*",
+    "https://labs.google/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://192.168.1.89:3000/*", "http://localhost:3000/*"],
+      "js": ["content-web.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://labs.google/fx/vi/tools/flow*"],
+      "js": ["content-flow.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+.env
+# Chrome profiles (sensitive data)
+flow-profile/
+chrome-profile/
+agent-chrome-profile/
+*-chrome-profile/
+
+# Upload files
+uploads/
+
+# Cache / logs
+*.log
+*.tmp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node
+node_modules/
+
+dist/
