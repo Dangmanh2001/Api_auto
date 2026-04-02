@@ -1,6 +1,6 @@
 // content-flow.js - chạy trên https://labs.google/fx/vi/tools/flow
 
-const rnd = (min, max) => Math.random() * (max - min) + min;
+const rnd = (min, max) => Math.floor(Math.random() * (max - min + 1) + min);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ==================== HELPERS ====================
@@ -118,6 +118,35 @@ async function clickAndVerify(el, description) {
   );
 }
 
+// Chặn chuyển hướng vào link edit gây gián đoạn task
+function blockEditNavigation() {
+  if (window.__editBlocked) return;
+  window.__editBlocked = true;
+  document.addEventListener(
+    "click",
+    (e) => {
+      const a = e.target.closest('a[href*="/edit/"]');
+      if (a) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+      }
+    },
+    true,
+  );
+}
+
+// Đếm số lượng video tiles đang có trên trang
+function getTileCount() {
+  const items = document.querySelectorAll("[data-item-index]");
+  if (!items.length) return 0;
+  const maxIndex = Math.max(
+    ...[...items].map((el) =>
+      parseInt(el.getAttribute("data-item-index") || "0"),
+    ),
+  );
+  return (maxIndex + 1) * 2;
+}
+
 // ==================== SETUP PAGE ====================
 
 async function setupPage(aspectRatio, modelType, mode) {
@@ -196,17 +225,6 @@ async function setupPage(aspectRatio, modelType, mode) {
 // ==================== WAIT FOR VIDEOS ====================
 
 async function waitForVideos(expectedCount, log, tilesBeforeOverride = null) {
-  const getTileCount = () => {
-    const items = document.querySelectorAll("[data-item-index]");
-    if (!items.length) return 0;
-    const maxIndex = Math.max(
-      ...[...items].map((el) =>
-        parseInt(el.getAttribute("data-item-index") || "0"),
-      ),
-    );
-    return (maxIndex + 1) * 2;
-  };
-
   const tilesBefore =
     tilesBeforeOverride !== null ? tilesBeforeOverride : getTileCount();
   const expectedTiles = tilesBefore + expectedCount;
@@ -275,34 +293,11 @@ async function waitForVideos(expectedCount, log, tilesBeforeOverride = null) {
 async function runTextToVideo(params, log) {
   const { aspectRatio, modelType, promptList } = params;
   await setupPage(aspectRatio, modelType, "Khung hình");
+  blockEditNavigation();
 
-  // Chặn navigation vào /edit/
-  if (!window.__editBlocked) {
-    window.__editBlocked = true;
-    document.addEventListener(
-      "click",
-      (e) => {
-        const a = e.target.closest('a[href*="/edit/"]');
-        if (a) {
-          e.preventDefault();
-          e.stopImmediatePropagation();
-        }
-      },
-      true,
-    );
-  }
-  // Capture tilesBefore TRƯỚC khi submit cả batch
-  const itemsBefore = document.querySelectorAll("[data-item-index]");
-  const tilesBefore = itemsBefore.length
-    ? (Math.max(
-        ...[...itemsBefore].map((el) =>
-          parseInt(el.getAttribute("data-item-index") || "0"),
-        ),
-      ) +
-        1) *
-      2
-    : 0;
-  const BATCH_SIZE = Math.floor(rnd(3, 6));
+  const tilesBefore = getTileCount();
+  const BATCH_SIZE = rnd(3, 5);
+
   for (let i = 0; i < promptList.length; i += BATCH_SIZE) {
     const batch = promptList.slice(i, i + BATCH_SIZE);
     log(`📦 Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${batch.length} prompt`);
@@ -338,21 +333,7 @@ async function runTextToVideo(params, log) {
 async function runImageToVideo(params, log, serverUrl) {
   const { aspectRatio, modelType, tasks } = params;
   await setupPage(aspectRatio, modelType, "Khung hình");
-
-  if (!window.__editBlocked) {
-    window.__editBlocked = true;
-    document.addEventListener(
-      "click",
-      (e) => {
-        const a = e.target.closest('a[href*="/edit/"]');
-        if (a) {
-          e.preventDefault();
-          e.stopImmediatePropagation();
-        }
-      },
-      true,
-    );
-  }
+  blockEditNavigation();
 
   async function selectImage(buttonText, fileName) {
     await waitForCondition(() =>
@@ -373,23 +354,12 @@ async function runImageToVideo(params, log, serverUrl) {
     log(`Đã chọn: ${fileName}`);
   }
 
-  const BATCH_SIZE = Math.floor(rnd(3, 6));
+  const BATCH_SIZE = rnd(3, 5);
+  const tilesBefore = getTileCount();
 
   for (let i = 0; i < tasks.length; i += BATCH_SIZE) {
     const batch = tasks.slice(i, i + BATCH_SIZE);
     log(`📦 Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${batch.length} task`);
-
-    // Capture tilesBefore TRƯỚC khi submit cả batch
-    const itemsBefore = document.querySelectorAll("[data-item-index]");
-    const tilesBefore = itemsBefore.length
-      ? (Math.max(
-          ...[...itemsBefore].map((el) =>
-            parseInt(el.getAttribute("data-item-index") || "0"),
-          ),
-        ) +
-          1) *
-        2
-      : 0;
 
     for (const task of batch) {
       log(`🖼️ Submit: ${task.prompt.substring(0, 40)}...`);
@@ -444,21 +414,7 @@ async function runImageToVideo(params, log, serverUrl) {
 async function runIngredientsToVideo(params, log, serverUrl) {
   const { aspectRatio, modelType, ingredients } = params;
   await setupPage(aspectRatio, modelType, "Thành phần");
-
-  if (!window.__editBlocked) {
-    window.__editBlocked = true;
-    document.addEventListener(
-      "click",
-      (e) => {
-        const a = e.target.closest('a[href*="/edit/"]');
-        if (a) {
-          e.preventDefault();
-          e.stopImmediatePropagation();
-        }
-      },
-      true,
-    );
-  }
+  blockEditNavigation();
 
   // Picker button: button có span "Tạo" nhưng KHÔNG có <i> (khác submit)
   // Submit button: button có cả <i>arrow_forward</i> và <span>Tạo</span>
@@ -491,23 +447,12 @@ async function runIngredientsToVideo(params, log, serverUrl) {
     await sleep(rnd(800, 1200));
   }
 
-  const BATCH_SIZE = Math.floor(rnd(3, 6));
+  const BATCH_SIZE = rnd(3, 5);
+  const tilesBefore = getTileCount();
 
   for (let i = 0; i < ingredients.length; i += BATCH_SIZE) {
     const batch = ingredients.slice(i, i + BATCH_SIZE);
     log(`📦 Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${batch.length} item`);
-
-    // Capture tilesBefore TRƯỚC khi submit cả batch
-    const itemsBefore = document.querySelectorAll("[data-item-index]");
-    const tilesBefore = itemsBefore.length
-      ? (Math.max(
-          ...[...itemsBefore].map((el) =>
-            parseInt(el.getAttribute("data-item-index") || "0"),
-          ),
-        ) +
-          1) *
-        2
-      : 0;
 
     for (const item of batch) {
       log(`🧪 Ingredient: ${item.prompt.substring(0, 40)}...`);

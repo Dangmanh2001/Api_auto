@@ -471,9 +471,12 @@
             <label class="setting-label">Model:</label>
             <div class="select-wrapper">
               <select name="modelType" class="custom-select">
-                <option value="Veo 3.1 - Fast" selected>Veo 3.1 - Fast</option>
-
-                <option value="Veo 3.1 - Quality">Veo 3.1 - Quality</option>
+                <option value="Veo 3.1 - Fast [Lower Priority]" selected>
+                  Veo 3.1 - Fast [Lower Priority]
+                </option>
+                <option value="Veo 3.1 - Lite">Veo 3.1 - Lite</option>
+                <option value="Veo 3.1 - Creative">Veo 3.1 - Creative</option>
+                <option value="Veo 3.1 - Stylized">Veo 3.1 - Stylized</option>
               </select>
             </div>
           </div>
@@ -492,15 +495,19 @@
       }
 
       function reindexFrames() {
-        document.querySelectorAll("#flowList .frame-group").forEach((group, i) => {
-          group.dataset.index = i;
-          const startInput = group.querySelector('input[name^="start_images"]');
-          const endInput = group.querySelector('input[name^="end_images"]');
-          const textarea = group.querySelector("textarea");
-          if (startInput) startInput.name = `start_images[${i}]`;
-          if (endInput) endInput.name = `end_images[${i}]`;
-          if (textarea) textarea.name = `prompts[${i}]`;
-        });
+        document
+          .querySelectorAll("#flowList .frame-group")
+          .forEach((group, i) => {
+            group.dataset.index = i;
+            const startInput = group.querySelector(
+              'input[name^="start_images"]',
+            );
+            const endInput = group.querySelector('input[name^="end_images"]');
+            const textarea = group.querySelector("textarea");
+            if (startInput) startInput.name = `start_images[${i}]`;
+            if (endInput) endInput.name = `end_images[${i}]`;
+            if (textarea) textarea.name = `prompts[${i}]`;
+          });
       }
 
       function addFullFrame() {
@@ -537,7 +544,9 @@
       function previewImage(input) {
         if (input.files && input.files[0]) {
           const reader = new FileReader();
-          reader.onload = (e) => { input.previousElementSibling.src = e.target.result; };
+          reader.onload = (e) => {
+            input.previousElementSibling.src = e.target.result;
+          };
           reader.readAsDataURL(input.files[0]);
         }
       }

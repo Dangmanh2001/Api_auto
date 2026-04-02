@@ -11,14 +11,61 @@ const taskQueue = require("../utils/taskQueue");
 
 // ==================== AGENT PROCESS MANAGER ====================
 let agentProcess = null;
-let agentPid     = null;
-let agentLogs    = [];
+let agentPid = null;
+let agentLogs = [];
+
+// Quản lý các kết nối SSE của Agent
+const agentTaskSseClients = new Map(); // agentId -> res
+const logSseClients = new Set(); // Clients watching the logs UI
+
+function tryDispatchTask(agentId) {
+  const res = agentTaskSseClients.get(agentId);
+  if (!res) return false;
+
+  const task = taskQueue.claim(agentId);
+  if (task) {
+    res.write(`event: task\ndata: ${JSON.stringify({ task })}\n\n`);
+    return true;
+  }
+  return false;
+}
+
+// Lắng nghe sự kiện từ taskQueue
+taskQueue.on("created", (task) => {
+  if (task.targetAgent) {
+    tryDispatchTask(task.targetAgent);
+  } else {
+    // Broadcast cho agent rảnh bất kỳ
+    for (const agentId of agentTaskSseClients.keys()) {
+      if (tryDispatchTask(agentId)) break;
+    }
+  }
+});
+
+// Lắng nghe log từ taskQueue để broadcast cho UI qua SSE
+taskQueue.on("log", ({ taskId, msg }) => {
+  appendAgentLog(`[Task #${taskId}] ${msg}`);
+});
+
+function appendAgentLog(msg) {
+  agentLogs.push(msg);
+  if (agentLogs.length > 100) agentLogs.shift();
+
+  // Broadcast to all UI clients watching logs
+  const data = JSON.stringify({ msg });
+  logSseClients.forEach((client) =>
+    client.write(`event: log\ndata: ${data}\n\n`),
+  );
+}
 
 function findChrome() {
   const candidates = [
     "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
     "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
-    path.join(process.env.LOCALAPPDATA || "", "Google\\Chrome\\Application\\chrome.exe"),
+    path.join(
+      process.env.LOCALAPPDATA || "",
+      "Google\\Chrome\\Application\\chrome.exe",
+    ),
   ];
   return candidates.find((p) => fs.existsSync(p)) || null;
 }
@@ -31,16 +78,16 @@ function startAgent(profilePath) {
   if (!chromePath) return { ok: false, msg: "Không tìm thấy Chrome trên máy" };
 
   // Tách userDataDir và profileDir từ đường dẫn
-  const normalized  = profilePath.trim().replace(/\//g, "\\");
-  const lastSlash   = normalized.lastIndexOf("\\");
+  const normalized = profilePath.trim().replace(/\//g, "\\");
+  const lastSlash = normalized.lastIndexOf("\\");
   if (lastSlash === -1) return { ok: false, msg: "Đường dẫn không hợp lệ" };
   const userDataDir = normalized.substring(0, lastSlash);
-  const profileDir  = normalized.substring(lastSlash + 1);
+  const profileDir = normalized.substring(lastSlash + 1);
 
   agentLogs = [];
   const extensionPath = path.join(__dirname, "..", "flow-extension");
-  agentLogs.push(`👤 Profile: ${profileDir}`);
-  agentLogs.push(`🚀 Đang mở Chrome...`);
+  appendAgentLog(`👤 Profile: ${profileDir}`);
+  appendAgentLog(`🚀 Đang mở Chrome...`);
 
   agentProcess = spawn(chromePath, [
     `--load-extension=${extensionPath}`,
@@ -52,13 +99,13 @@ function startAgent(profilePath) {
   ]);
 
   agentPid = agentProcess.pid;
-  agentLogs.push(`✅ Chrome mở với profile: ${profileDir}`);
-  agentLogs.push(`ℹ️ Khi dừng: nhấn Stop rồi tự đóng cửa sổ Chrome`);
+  appendAgentLog(`✅ Chrome mở với profile: ${profileDir}`);
+  appendAgentLog(`ℹ️ Khi dừng: nhấn Stop rồi tự đóng cửa sổ Chrome`);
 
   agentProcess.on("exit", () => {
     agentProcess = null;
-    agentPid     = null;
-    agentLogs.push("🔴 Chrome đã đóng");
+    agentPid = null;
+    appendAgentLog("🔴 Chrome đã đóng");
   });
 
   return { ok: true, msg: "Chrome đã khởi động với extension" };
@@ -69,7 +116,7 @@ function stopAgent() {
   // Chỉ kill đúng PID của Chrome đã spawn, không ảnh hưởng Chrome khác
   spawn("taskkill", ["/PID", String(agentPid), "/F", "/T"]);
   agentProcess = null;
-  agentPid     = null;
+  agentPid = null;
   return { ok: true, msg: "Agent đã dừng" };
 }
 
@@ -141,11 +188,41 @@ router.get("/gemini", TextToVideoControllers.gemini);
 router.post("/gemini", TextToVideoControllers.postGemini);
 
 // ==================== AGENT API ====================
-// Agent poll task (máy client gọi mỗi 3s)
-router.get("/agent/poll", (req, res) => {
-  const agentInfo = req.query.agent || req.ip;
-  const task = taskQueue.claim(agentInfo);
-  res.json({ task: task ? { id: task.id, type: task.type, params: task.params } : null });
+// SSE Endpoint cho Agent để nhận Task thời gian thực
+router.get("/agent/stream", (req, res) => {
+  const agentId = req.query.agent;
+  if (!agentId) return res.status(400).send("Missing agent ID");
+
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+
+  agentTaskSseClients.set(agentId, res);
+  console.log(`📡 Agent ${agentId} đã kết nối SSE`);
+
+  // Thử gửi task ngay nếu đang có sẵn trong hàng đợi
+  tryDispatchTask(agentId);
+
+  req.on("close", () => {
+    agentTaskSseClients.delete(agentId);
+    console.log(`🔌 Agent ${agentId} đã ngắt kết nối SSE`);
+  });
+});
+
+// SSE Endpoint cho Dashboard UI để nhận Log thời gian thực
+router.get("/agent/logs/stream", (req, res) => {
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+
+  // Send initial logs
+  res.write(`event: init\ndata: ${JSON.stringify({ logs: agentLogs })}\n\n`);
+
+  logSseClients.add(res);
+
+  req.on("close", () => {
+    logSseClients.delete(res);
+  });
 });
 
 // Agent gửi log về server
@@ -174,7 +251,9 @@ router.get("/task/:id", (req, res) => {
 });
 
 // Khởi động agent
-router.post("/agent/start", (req, res) => res.json(startAgent(req.body.profilePath)));
+router.post("/agent/start", (req, res) =>
+  res.json(startAgent(req.body.profilePath)),
+);
 
 // Dừng agent
 router.post("/agent/stop", (_req, res) => res.json(stopAgent()));

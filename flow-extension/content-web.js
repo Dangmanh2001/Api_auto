@@ -3,14 +3,12 @@ const SERVER = location.origin;
 let agentId = null;
 let isBusy = false;
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
 // Lấy agentId từ background
 chrome.runtime.sendMessage({ action: "get-agent-id" }, (res) => {
   agentId = res?.agentId || "unknown";
   showBadge("green", `✅ Agent: ${agentId}`);
   injectAgentId();
-  startPolling();
+  setupTaskStream();
 });
 
 function showBadge(color, text) {
@@ -24,7 +22,8 @@ function showBadge(color, text) {
       "box-shadow:0 2px 8px rgba(0,0,0,.25);transition:background .3s;";
     document.body.appendChild(badge);
   }
-  badge.style.background = color === "green" ? "#22c55e" : color === "yellow" ? "#f59e0b" : "#ef4444";
+  badge.style.background =
+    color === "green" ? "#22c55e" : color === "yellow" ? "#f59e0b" : "#ef4444";
   badge.style.color = "#fff";
   badge.textContent = text;
 }
@@ -46,68 +45,70 @@ function injectAgentId() {
 const observer = new MutationObserver(() => injectAgentId());
 observer.observe(document.body, { childList: true, subtree: true });
 
-async function startPolling() {
-  while (true) {
-    await sleep(3000);
-    if (isBusy || !agentId) continue;
+function setupTaskStream() {
+  if (!agentId) return;
+
+  console.log("📡 Connecting to real-time task stream...");
+  const evtSource = new EventSource(
+    `${SERVER}/api/agent/stream?agent=${encodeURIComponent(agentId)}`,
+  );
+
+  evtSource.addEventListener("task", async (e) => {
+    const data = JSON.parse(e.data);
+    if (!data.task || isBusy) return;
+
+    isBusy = true;
+    const { id, type, params } = data.task;
+
+    showBadge("yellow", `⏳ Đang chạy task #${id}...`);
+
+    const postLog = (msg) =>
+      fetch(`${SERVER}/api/agent/log/${id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ msg }),
+      }).catch(() => {});
 
     try {
-      const res = await fetch(
-        `${SERVER}/api/agent/poll?agent=${encodeURIComponent(agentId)}`
-      );
-      const data = await res.json();
-      if (!data.task) continue;
+      await postLog(`🤖 [${agentId}] Nhận task #${id}: ${type}`);
 
-      isBusy = true;
-      const { id, type, params } = data.task;
-
-      showBadge("yellow", `⏳ Đang chạy task #${id}...`);
-
-      const postLog = (msg) =>
-        fetch(`${SERVER}/api/agent/log/${id}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ msg }),
-        }).catch(() => {});
-
-      try {
-        await postLog(`🤖 [${agentId}] Nhận task #${id}: ${type}`);
-
-        await new Promise((resolve, reject) => {
-          chrome.runtime.sendMessage(
-            { action: "run-task", taskId: id, type, params },
-            (res) => {
-              if (chrome.runtime.lastError) {
-                reject(new Error(chrome.runtime.lastError.message));
-              } else if (res?.error) {
-                reject(new Error(res.error));
-              } else {
-                resolve();
-              }
+      await new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage(
+          { action: "run-task", taskId: id, type, params },
+          (res) => {
+            if (chrome.runtime.lastError) {
+              reject(new Error(chrome.runtime.lastError.message));
+            } else if (res?.error) {
+              reject(new Error(res.error));
+            } else {
+              resolve();
             }
-          );
-        });
+          },
+        );
+      });
 
-        await fetch(`${SERVER}/api/agent/finish/${id}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status: "done" }),
-        });
-        await postLog("✅ Task hoàn thành!");
-        showBadge("green", `✅ Agent: ${agentId}`);
-      } catch (err) {
-        await fetch(`${SERVER}/api/agent/finish/${id}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status: "failed", error: err.message }),
-        }).catch(() => {});
-        await postLog(`❌ Thất bại: ${err.message}`);
-        showBadge("green", `✅ Agent: ${agentId}`);
-      } finally {
-        isBusy = false;
-      }
+      await fetch(`${SERVER}/api/agent/finish/${id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "done" }),
+      });
+      await postLog("✅ Task hoàn thành!");
     } catch (err) {
-      // Server chưa bật hoặc mất kết nối — im lặng
+      await fetch(`${SERVER}/api/agent/finish/${id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "failed", error: err.message }),
+      }).catch(() => {});
+      await postLog(`❌ Thất bại: ${err.message}`);
+    } finally {
+      showBadge("green", `✅ Agent: ${agentId}`);
+      isBusy = false;
     }
-  }
+  });
+
+  evtSource.onerror = (err) => {
+    console.error("SSE Connection failed, retrying in 5s...", err);
+    evtSource.close();
+    setTimeout(setupTaskStream, 5000);
+  };
 }
