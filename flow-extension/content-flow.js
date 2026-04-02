@@ -251,19 +251,24 @@ async function waitForVideos(expectedCount, log, tilesBeforeOverride = null) {
     }
 
     // Bấm Thử lại nếu có
-    const retryBtns = [...document.querySelectorAll("button")].filter(
-      (b) => b.innerText?.trim() === "Thử lại",
-    );
+    const retryBtns = [...document.querySelectorAll("button")].filter((b) => {
+      const btnText = b.textContent || "";
+      // Kiểm tra xem nút có chứa text "Thử lại" (kể cả text ẩn) hoặc icon "refresh"
+      return (
+        btnText.includes("Thử lại") ||
+        b.querySelector("i")?.textContent?.trim() === "refresh"
+      );
+    });
+
     if (retryBtns.length > 0) {
       stableCount = 0;
-      const pick = retryBtns[Math.floor(Math.random() * retryBtns.length)];
-      pick.scrollIntoView({ block: "center", behavior: "smooth" });
-      await sleep(rnd(600, 1000));
-      pick.dispatchEvent(
-        new MouseEvent("click", { bubbles: false, cancelable: true }),
+      log(
+        `⚠️ Phát hiện ${retryBtns.length} video bị lỗi, đang tự động bấm Thử lại...`,
       );
-      log(`⚠️ Bấm Thử lại (${retryBtns.length} nút)`);
-      await sleep(rnd(500, 1000));
+      // Bấm nút đầu tiên lỗi tìm thấy
+      const pick = retryBtns[0];
+      await realClick(pick);
+      await sleep(rnd(1500, 3000)); // Chờ UI phản hồi
       continue;
     }
 
@@ -313,15 +318,12 @@ async function runTextToVideo(params, log) {
         [...document.querySelectorAll("button")].find(
           (b) => b.querySelector("i")?.textContent?.trim() === "arrow_forward",
         ) ||
-        [...document.querySelectorAll("button")].find((b) =>
-          b.textContent?.includes("Tạo"),
+        [...document.querySelectorAll("button")].find(
+          (b) => b.textContent?.trim() === "Tạo",
         );
-      if (createBtn) {
-        createBtn.dispatchEvent(
-          new MouseEvent("click", { bubbles: true, cancelable: true }),
-        );
-      }
-      log(`✅ Submit: ${prompt.substring(0, 40)}...`);
+
+      if (createBtn) await realClick(createBtn);
+      log(`✅ Đã gửi prompt: ${prompt.substring(0, 40)}...`);
       await sleep(rnd(1200, 2500));
     }
 
@@ -395,10 +397,8 @@ async function runImageToVideo(params, log, serverUrl) {
           b.textContent?.trim() === "Tạo" ||
           b.querySelector("span")?.textContent?.trim() === "Tạo",
       );
-      createBtn?.dispatchEvent(
-        new MouseEvent("click", { bubbles: true, cancelable: true }),
-      );
-      log(`✅ Click Tạo`);
+      if (createBtn) await realClick(createBtn);
+      log(`✅ Đã gửi prompt: ${task.prompt.substring(0, 30)}...`);
 
       // Chờ UI reset (input file xuất hiện lại) trước khi submit task tiếp theo
       if (task !== batch[batch.length - 1]) {
@@ -491,10 +491,8 @@ async function runIngredientsToVideo(params, log, serverUrl) {
       if (!submitBtn)
         throw new Error("Không tìm thấy nút submit (arrow_forward)");
 
-      submitBtn.dispatchEvent(
-        new MouseEvent("click", { bubbles: true, cancelable: true }),
-      );
-      log("✅ Click Tạo");
+      await realClick(submitBtn);
+      log(`✅ Đã gửi ingredient: ${item.prompt.substring(0, 30)}...`);
 
       if (item !== batch[batch.length - 1]) {
         await sleep(rnd(1200, 2000));
