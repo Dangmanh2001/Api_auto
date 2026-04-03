@@ -52,6 +52,11 @@ async function createBrowser() {
       "--disable-blink-features=AutomationControlled",
       "--no-first-run",
       "--no-default-browser-check",
+      // Cho phép chạy auto khi tab không được focus / cửa sổ bị minimize
+      "--disable-background-timer-throttling",
+      "--disable-backgrounding-occluded-windows",
+      "--disable-renderer-backgrounding",
+      "--disable-background-media-suspend",
     ],
     customConfig: { userDataDir: path.resolve(CHROME_PROFILE) },
     connectOption: { defaultViewport: null },
@@ -61,6 +66,19 @@ async function createBrowser() {
   if (executablePath) options.executablePath = executablePath;
 
   const { browser, page } = await connect(options);
+
+  // Giả lập tab luôn visible/focused dù người dùng chuyển sang tab khác
+  await page.evaluateOnNewDocument(() => {
+    Object.defineProperty(document, "visibilityState", { get: () => "visible" });
+    Object.defineProperty(document, "hidden", { get: () => false });
+    // Chặn website lắng nghe visibilitychange để không bị pause
+    const _addEvt = EventTarget.prototype.addEventListener;
+    EventTarget.prototype.addEventListener = function (type, ...args) {
+      if (type === "visibilitychange") return;
+      return _addEvt.call(this, type, ...args);
+    };
+  });
+
   console.log("🚀 Chrome đã khởi động");
   return { browser, page };
 }

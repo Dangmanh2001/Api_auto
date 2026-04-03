@@ -251,62 +251,46 @@
         color: var(--text-main, #e2e2e2);
         padding: 10px;
       }
-      .navbar {
+      nav {
         width: 100%;
-        padding: 12px 25px;
         display: flex;
         align-items: center;
-        border-radius: 10px 10px 0 0;
+        gap: 8px;
+        margin-bottom: 40px;
+        flex-wrap: wrap;
       }
 
-      /* Logo */
-      .navbar-brand {
-        font-size: 20px;
+      .nav-brand {
+        font-size: 18px;
         font-weight: bold;
         color: white;
-        margin-right: 30px;
-      }
-
-      /* Menu */
-      .navbar-nav {
-        display: flex;
-        gap: 20px;
-      }
-
-      /* Link */
-      .navbar-nav a {
         text-decoration: none;
-        color: #c9d1d9;
-        font-size: 15px;
-        padding: 6px 10px;
-        border-radius: 6px;
-        transition: all 0.2s ease;
+        margin-right: 16px;
+      }
+
+      nav a {
+        text-decoration: none;
+        color: var(--text-dim);
+        font-size: 14px;
+        padding: 6px 12px;
+        border-radius: 20px;
+        border: 1px solid transparent;
+        transition: all 0.2s;
+      }
+
+      nav a:hover {
+        color: var(--text-main);
+        border-color: var(--border-color);
+      }
+
+      nav a.active {
+        color: var(--accent-blue);
+        border-color: var(--accent-blue);
       }
 
       @media (max-width: 640px) {
         body {
           padding: 12px;
-        }
-
-        .navbar {
-          flex-wrap: wrap;
-          gap: 8px;
-          padding: 10px 12px;
-        }
-
-        .navbar-brand {
-          margin-right: 0;
-          font-size: 17px;
-        }
-
-        .navbar-nav {
-          flex-wrap: wrap;
-          gap: 4px;
-        }
-
-        .navbar-nav a {
-          font-size: 12px;
-          padding: 4px 7px;
         }
 
         .bulk-header {
@@ -366,16 +350,13 @@
   <body>
     <div id="page-root">
       <div class="container hide-end" id="mainApp">
-        <nav class="navbar">
-          <div class="navbar-brand">API Tool</div>
-
-          <div class="navbar-nav">
-            <a href="/">Home</a>
-            <a href="/api">Text To Video</a>
-            <a href="/api/gemini">Gemini</a>
-            <a href="/api/imageToVideo">Image To Video</a>
-            <a href="/api/IngredientsToVideo">Ingredients To Video</a>
-          </div>
+        <nav>
+          <a class="nav-brand">API Tool</a>
+          <a href="/">Home</a>
+          <a href="/api">Text To Video</a>
+          <a href="/api/gemini">Gemini</a>
+          <a href="/api/imageToVideo" class="active">Image To Video</a>
+          <a href="/api/IngredientsToVideo">Ingredients To Video</a>
         </nav>
 
         <form
