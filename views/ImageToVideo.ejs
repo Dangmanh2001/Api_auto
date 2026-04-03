@@ -364,156 +364,163 @@
     </style>
   </head>
   <body>
-    <div class="container hide-end" id="mainApp">
-      <nav class="navbar">
-        <div class="navbar-brand">API Tool</div>
+    <div id="page-root">
+      <div class="container hide-end" id="mainApp">
+        <nav class="navbar">
+          <div class="navbar-brand">API Tool</div>
 
-        <div class="navbar-nav">
-          <a href="/">Home</a>
-          <a href="/api">Text To Video</a>
-          <a href="/api/gemini">Gemini</a>
-          <a href="/api/imageToVideo">Image To Video</a>
-          <a href="/api/IngredientsToVideo">Ingredients To Video</a>
-        </div>
-      </nav>
+          <div class="navbar-nav">
+            <a href="/">Home</a>
+            <a href="/api">Text To Video</a>
+            <a href="/api/gemini">Gemini</a>
+            <a href="/api/imageToVideo">Image To Video</a>
+            <a href="/api/IngredientsToVideo">Ingredients To Video</a>
+          </div>
+        </nav>
 
-      <form
-        id="renderForm"
-        action="/api/imageToVideo"
-        method="POST"
-        enctype="multipart/form-data"
-      >
-        <div class="bulk-header">
-          <div class="header-controls">
-            <span>Cấu hình luồng Flow</span>
-            <button
-              type="button"
-              class="btn-toggle-end"
-              onclick="toggleEndFrames()"
-            >
-              <span class="material-symbols-outlined" style="font-size: 18px"
-                >visibility_off</span
+        <form
+          id="renderForm"
+          action="/api/imageToVideo"
+          method="POST"
+          enctype="multipart/form-data"
+        >
+          <div class="bulk-header">
+            <div class="header-controls">
+              <span>Cấu hình luồng Flow</span>
+              <button
+                type="button"
+                class="btn-toggle-end"
+                onclick="toggleEndFrames()"
               >
-              Ẩn/Hiện End Frame
+                <span class="material-symbols-outlined" style="font-size: 18px"
+                  >visibility_off</span
+                >
+                Ẩn/Hiện End Frame
+              </button>
+            </div>
+            <button type="button" class="btn-clear" onclick="clearAll()">
+              <span class="material-symbols-outlined">delete_sweep</span> Xóa
+              tất cả
             </button>
           </div>
-          <button type="button" class="btn-clear" onclick="clearAll()">
-            <span class="material-symbols-outlined">delete_sweep</span> Xóa tất
-            cả
-          </button>
-        </div>
 
-        <div id="flowList">
-          <div class="frame-group" data-index="0">
-            <div class="images-container">
-              <div class="image-box">
-                <span>Start Frame</span>
-                <img
-                  src="https://cdn-media.sforum.vn/storage/app/media/ctvseo_maihue/hinh-nen-1920-1080/hinh-nen-1920-1080-thumbnail.jpg"
-                  class="thumbnail"
-                  onclick="triggerUpload(this)"
-                  style="cursor: pointer"
-                />
-                <input
-                  type="file"
-                  name="start_images[0]"
-                  accept="image/*"
-                  style="display: none"
-                  onchange="previewImage(this)"
-                />
+          <div id="flowList">
+            <div class="frame-group" data-index="0">
+              <div class="images-container">
+                <div class="image-box">
+                  <span>Start Frame</span>
+                  <img
+                    src="https://cdn-media.sforum.vn/storage/app/media/ctvseo_maihue/hinh-nen-1920-1080/hinh-nen-1920-1080-thumbnail.jpg"
+                    class="thumbnail"
+                    onclick="triggerUpload(this)"
+                    style="cursor: pointer"
+                  />
+                  <input
+                    type="file"
+                    name="start_images[0]"
+                    accept="image/*"
+                    style="display: none"
+                    onchange="previewImage(this)"
+                  />
+                </div>
+
+                <span class="material-symbols-outlined arrow-sep"
+                  >sync_alt</span
+                >
+
+                <div class="image-box end-frame-box">
+                  <span>End Frame</span>
+                  <img
+                    src="https://cdn-media.sforum.vn/storage/app/media/thunguyen/hinh-nen-vui-ve-2.jpg"
+                    class="thumbnail"
+                    onclick="triggerUpload(this)"
+                    style="cursor: pointer"
+                  />
+                  <input
+                    type="file"
+                    name="end_images[0]"
+                    accept="image/*"
+                    style="display: none"
+                    onchange="previewImage(this)"
+                  />
+                </div>
+
+                <textarea
+                  name="prompts[0]"
+                  class="prompt-area"
+                  placeholder="Nhập prompt..."
+                ></textarea>
               </div>
+            </div>
+          </div>
 
-              <span class="material-symbols-outlined arrow-sep">sync_alt</span>
-
-              <div class="image-box end-frame-box">
-                <span>End Frame</span>
-                <img
-                  src="https://cdn-media.sforum.vn/storage/app/media/thunguyen/hinh-nen-vui-ve-2.jpg"
-                  class="thumbnail"
-                  onclick="triggerUpload(this)"
-                  style="cursor: pointer"
-                />
-                <input
-                  type="file"
-                  name="end_images[0]"
-                  accept="image/*"
-                  style="display: none"
-                  onchange="previewImage(this)"
-                />
+          <div class="add-row">
+            <button
+              type="button"
+              class="btn-add-frame"
+              onclick="addFullFrame()"
+            >
+              <span class="material-symbols-outlined">add</span>
+            </button>
+          </div>
+          <div class="settings-row">
+            <div class="setting-group">
+              <label class="setting-label">Tỉ lệ khung hình:</label>
+              <div class="select-wrapper">
+                <select name="aspectRatio" class="custom-select">
+                  <option value="16:9" selected>Ngang</option>
+                  <option value="9:16">Dọc</option>
+                </select>
               </div>
+            </div>
 
-              <textarea
-                name="prompts[0]"
-                class="prompt-area"
-                placeholder="Nhập prompt..."
-              ></textarea>
+            <div class="setting-group">
+              <label class="setting-label">Model:</label>
+              <div class="select-wrapper">
+                <select name="modelType" class="custom-select">
+                  <option value="Veo 3.1 - Fast [Lower Priority]" selected>
+                    Veo 3.1 - Fast [Lower Priority]
+                  </option>
+                  <option value="Veo 3.1 - Lite">Veo 3.1 - Lite</option>
+                  <option value="Veo 3.1 - Creative">Veo 3.1 - Creative</option>
+                  <option value="Veo 3.1 - Stylized">Veo 3.1 - Stylized</option>
+                </select>
+              </div>
             </div>
           </div>
-        </div>
-
-        <div class="add-row">
-          <button type="button" class="btn-add-frame" onclick="addFullFrame()">
-            <span class="material-symbols-outlined">add</span>
-          </button>
-        </div>
-        <div class="settings-row">
-          <div class="setting-group">
-            <label class="setting-label">Tỉ lệ khung hình:</label>
-            <div class="select-wrapper">
-              <select name="aspectRatio" class="custom-select">
-                <option value="16:9" selected>Ngang</option>
-                <option value="9:16">Dọc</option>
-              </select>
-            </div>
+          <div class="footer">
+            <button type="submit" class="btn-submit">
+              <span class="material-symbols-outlined">arrow_forward</span>
+            </button>
           </div>
+        </form>
+      </div>
+      <script>
+        function toggleEndFrames() {
+          const app = document.getElementById("mainApp");
+          app.classList.toggle("hide-end");
+        }
 
-          <div class="setting-group">
-            <label class="setting-label">Model:</label>
-            <div class="select-wrapper">
-              <select name="modelType" class="custom-select">
-                <option value="Veo 3.1 - Fast [Lower Priority]" selected>
-                  Veo 3.1 - Fast [Lower Priority]
-                </option>
-                <option value="Veo 3.1 - Lite">Veo 3.1 - Lite</option>
-                <option value="Veo 3.1 - Creative">Veo 3.1 - Creative</option>
-                <option value="Veo 3.1 - Stylized">Veo 3.1 - Stylized</option>
-              </select>
-            </div>
-          </div>
-        </div>
-        <div class="footer">
-          <button type="submit" class="btn-submit">
-            <span class="material-symbols-outlined">arrow_forward</span>
-          </button>
-        </div>
-      </form>
-    </div>
-    <script>
-      function toggleEndFrames() {
-        const app = document.getElementById("mainApp");
-        app.classList.toggle("hide-end");
-      }
+        function reindexFrames() {
+          document
+            .querySelectorAll("#flowList .frame-group")
+            .forEach((group, i) => {
+              group.dataset.index = i;
+              const startInput = group.querySelector(
+                'input[name^="start_images"]',
+              );
+              const endInput = group.querySelector('input[name^="end_images"]');
+              const textarea = group.querySelector("textarea");
+              if (startInput) startInput.name = `start_images[${i}]`;
+              if (endInput) endInput.name = `end_images[${i}]`;
+              if (textarea) textarea.name = `prompts[${i}]`;
+            });
+        }
 
-      function reindexFrames() {
-        document
-          .querySelectorAll("#flowList .frame-group")
-          .forEach((group, i) => {
-            group.dataset.index = i;
-            const startInput = group.querySelector(
-              'input[name^="start_images"]',
-            );
-            const endInput = group.querySelector('input[name^="end_images"]');
-            const textarea = group.querySelector("textarea");
-            if (startInput) startInput.name = `start_images[${i}]`;
-            if (endInput) endInput.name = `end_images[${i}]`;
-            if (textarea) textarea.name = `prompts[${i}]`;
-          });
-      }
-
-      function addFullFrame() {
-        const list = document.getElementById("flowList");
-        const idx = list.querySelectorAll(".frame-group").length;
-        const frameHTML = `
+        function addFullFrame() {
+          const list = document.getElementById("flowList");
+          const idx = list.querySelectorAll(".frame-group").length;
+          const frameHTML = `
           <div class="frame-group extra-frame" data-index="${idx}">
             <button class="btn-delete" onclick="this.closest('.frame-group').remove(); reindexFrames();"><span class="material-symbols-outlined">close</span></button>
             <div class="images-container">
@@ -531,25 +538,29 @@
               <textarea name="prompts[${idx}]" class="prompt-area" placeholder="Nhập prompt..."></textarea>
             </div>
           </div>`;
-        list.insertAdjacentHTML("beforeend", frameHTML);
-      }
-
-      function clearAll() {
-        document.querySelectorAll(".extra-frame").forEach((el) => el.remove());
-        reindexFrames();
-      }
-      function triggerUpload(img) {
-        img.nextElementSibling.click();
-      }
-      function previewImage(input) {
-        if (input.files && input.files[0]) {
-          const reader = new FileReader();
-          reader.onload = (e) => {
-            input.previousElementSibling.src = e.target.result;
-          };
-          reader.readAsDataURL(input.files[0]);
+          list.insertAdjacentHTML("beforeend", frameHTML);
         }
-      }
-    </script>
+
+        function clearAll() {
+          document
+            .querySelectorAll(".extra-frame")
+            .forEach((el) => el.remove());
+          reindexFrames();
+        }
+        function triggerUpload(img) {
+          img.nextElementSibling.click();
+        }
+        function previewImage(input) {
+          if (input.files && input.files[0]) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+              input.previousElementSibling.src = e.target.result;
+            };
+            reader.readAsDataURL(input.files[0]);
+          }
+        }
+      </script>
+    </div>
+    <script src="/javascripts/spa.js"></script>
   </body>
 </html>

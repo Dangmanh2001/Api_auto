@@ -42,7 +42,11 @@ function injectAgentId() {
 }
 
 // Quan sát DOM thay đổi để inject agentId vào form mới
-const observer = new MutationObserver(() => injectAgentId());
+let injectTimer;
+const observer = new MutationObserver(() => {
+  clearTimeout(injectTimer);
+  injectTimer = setTimeout(injectAgentId, 300); // Chỉ chạy sau khi DOM ổn định 300ms
+});
 observer.observe(document.body, { childList: true, subtree: true });
 
 function setupTaskStream() {

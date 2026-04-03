@@ -197,6 +197,11 @@ router.get("/agent/stream", (req, res) => {
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
 
+  // Nếu agent này đã có kết nối cũ, đóng nó lại trước khi ghi đè
+  if (agentTaskSseClients.has(agentId)) {
+    agentTaskSseClients.get(agentId).end();
+  }
+
   agentTaskSseClients.set(agentId, res);
   console.log(`📡 Agent ${agentId} đã kết nối SSE`);
 
@@ -215,12 +220,18 @@ router.get("/agent/logs/stream", (req, res) => {
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
 
+  // Gửi một bản tin ping định kỳ để giữ kết nối và phát hiện client ngắt kết nối nhanh hơn
+  const keepAlive = setInterval(() => {
+    res.write(": keep-alive\n\n");
+  }, 30000);
+
   // Send initial logs
   res.write(`event: init\ndata: ${JSON.stringify({ logs: agentLogs })}\n\n`);
 
   logSseClients.add(res);
 
   req.on("close", () => {
+    clearInterval(keepAlive);
     logSseClients.delete(res);
   });
 });
