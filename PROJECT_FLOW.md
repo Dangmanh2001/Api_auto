@@ -4,9 +4,23 @@
 
 Dự án là một web app (Express.js) cho phép người dùng tạo video tự động trên **Google Flow** (`labs.google/fx/vi/tools/flow`) thông qua một Chrome extension chạy trên máy khách.
 
+---
+
+## Luồng hoạt động
+
 ```
 [Người dùng] → [Web UI :3000] → [TaskQueue] → [Extension] → [Google Flow]
 ```
+
+[Server Express (localhost:3000)]
+↕ SSE (EventSource)
+[Chrome Extension - content-web.js] ← cần extension
+↕ chrome.runtime.sendMessage
+[background.js]
+↕ chrome.debugger API (CDP)
+[Tab mới → labs.google Flow]
+↕ content-flow.js
+[Tự động gõ prompt, click, upload]
 
 ---
 
@@ -141,6 +155,7 @@ content-flow.js đang chạy trên tab Google Flow
 #### Chi tiết từng hàm:
 
 **setupPage()** — chạy đầu tiên, dùng chung cho cả 3 loại:
+
 ```
 1. Chờ trang login xong (nếu chưa login)
 2. Click "Dự án mới"
@@ -152,6 +167,7 @@ content-flow.js đang chạy trên tab Google Flow
 ```
 
 **runTextToVideo()**:
+
 ```
 Chia prompts thành batch 3~5 prompt
   → Với mỗi prompt:
@@ -163,6 +179,7 @@ Chia prompts thành batch 3~5 prompt
 ```
 
 **runImageToVideo()**:
+
 ```
 Với mỗi task (startImage + endImage + prompt):
   ① Tải ảnh từ server qua background.js (fetch-file)
@@ -174,6 +191,7 @@ Với mỗi task (startImage + endImage + prompt):
 ```
 
 **runIngredientsToVideo()**:
+
 ```
 Với mỗi ingredient (nhiều ảnh + 1 prompt):
   ① Upload ảnh
@@ -183,6 +201,7 @@ Với mỗi ingredient (nhiều ảnh + 1 prompt):
 ```
 
 **waitForVideos()** — chờ render xong:
+
 ```
 Đếm tiles trước ([data-item-index])
   → Loop mỗi 2.5~5 giây:
@@ -253,24 +272,24 @@ Khi xong hoàn toàn:
 
 ## Các API Endpoints
 
-| Method | Endpoint | Mô tả |
-|--------|----------|-------|
-| GET | `/` | Trang chủ — chọn tool |
-| GET/POST | `/api` | Text To Video |
-| GET/POST | `/api/imageToVideo` | Image To Video |
-| GET/POST | `/api/IngredientsToVideo` | Ingredients To Video |
-| GET/POST | `/api/gemini` | Phân tích YouTube bằng Gemini AI |
-| GET | `/api/agent/stream` | SSE — agent kết nối nhận task real-time |
-| GET | `/api/agent/logs/stream` | SSE — UI nhận log real-time |
-| POST | `/api/agent/log/:id` | Extension gửi log về server |
-| POST | `/api/agent/finish/:id` | Extension báo task xong/lỗi |
-| GET | `/api/tasks` | Xem danh sách tất cả tasks |
-| GET | `/api/task/:id` | Xem chi tiết 1 task |
-| POST | `/api/agent/start` | Khởi động Chrome với extension |
-| POST | `/api/agent/stop` | Dừng Chrome |
-| GET | `/api/agent/running` | Kiểm tra Chrome có đang chạy |
-| GET | `/api/agent/logs` | Lấy logs gần đây |
-| GET | `/uploads/:filename` | Truy cập file đã upload |
+| Method   | Endpoint                  | Mô tả                                   |
+| -------- | ------------------------- | --------------------------------------- |
+| GET      | `/`                       | Trang chủ — chọn tool                   |
+| GET/POST | `/api`                    | Text To Video                           |
+| GET/POST | `/api/imageToVideo`       | Image To Video                          |
+| GET/POST | `/api/IngredientsToVideo` | Ingredients To Video                    |
+| GET/POST | `/api/gemini`             | Phân tích YouTube bằng Gemini AI        |
+| GET      | `/api/agent/stream`       | SSE — agent kết nối nhận task real-time |
+| GET      | `/api/agent/logs/stream`  | SSE — UI nhận log real-time             |
+| POST     | `/api/agent/log/:id`      | Extension gửi log về server             |
+| POST     | `/api/agent/finish/:id`   | Extension báo task xong/lỗi             |
+| GET      | `/api/tasks`              | Xem danh sách tất cả tasks              |
+| GET      | `/api/task/:id`           | Xem chi tiết 1 task                     |
+| POST     | `/api/agent/start`        | Khởi động Chrome với extension          |
+| POST     | `/api/agent/stop`         | Dừng Chrome                             |
+| GET      | `/api/agent/running`      | Kiểm tra Chrome có đang chạy            |
+| GET      | `/api/agent/logs`         | Lấy logs gần đây                        |
+| GET      | `/uploads/:filename`      | Truy cập file đã upload                 |
 
 ---
 
@@ -315,12 +334,12 @@ pending → running → done
                  ↘ failed
 ```
 
-| Status | Ý nghĩa |
-|--------|---------|
-| `pending` | Vừa tạo, chờ agent nhận |
+| Status    | Ý nghĩa                                  |
+| --------- | ---------------------------------------- |
+| `pending` | Vừa tạo, chờ agent nhận                  |
 | `running` | Extension đang thực thi trên Google Flow |
-| `done` | Hoàn thành thành công |
-| `failed` | Có lỗi trong quá trình chạy |
+| `done`    | Hoàn thành thành công                    |
+| `failed`  | Có lỗi trong quá trình chạy              |
 
 ---
 
