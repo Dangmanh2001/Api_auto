@@ -7,6 +7,8 @@ const { spawn } = require("child_process");
 const TextToVideoControllers = require("../controllers/TextToVideo.controllers");
 const ImageToVideoController = require("../controllers/ImageToVideo.controller");
 const IngredientsToVideo = require("../controllers/IngredientsToVideo");
+const CloneChannel = require("../controllers/CloneChannel.controller");
+const TextToImage = require("../controllers/TextToImage.controller");
 const taskQueue = require("../utils/taskQueue");
 
 // ==================== AGENT PROCESS MANAGER ====================
@@ -186,6 +188,17 @@ router.post(
 /* Gọi api gemini để phân tích video */
 router.get("/gemini", TextToVideoControllers.gemini);
 router.post("/gemini", TextToVideoControllers.postGemini);
+
+/* Text To Image */
+router.get("/textToImage", TextToImage.getPage);
+router.post("/textToImage", TextToImage.post);
+
+/* Clone YouTube Channel */
+router.get("/clone-channel", CloneChannel.getPage);
+router.get("/clone-channel/fetch", CloneChannel.fetchChannel);
+router.get("/clone-channel/detail", CloneChannel.fetchDetail);
+router.get("/clone-channel/transcript", CloneChannel.getTranscript);
+router.post("/clone-channel/analyze", CloneChannel.analyzeTranscript);
 
 // ==================== AGENT API ====================
 // SSE Endpoint cho Agent để nhận Task thời gian thực

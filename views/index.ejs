@@ -83,72 +83,6 @@
         line-height: 1.5;
       }
 
-      .agent-panel {
-        width: 100%;
-        max-width: 860px;
-        margin-top: 32px;
-        background: var(--card-bg);
-        border: 1px solid var(--border-color);
-        border-radius: 14px;
-        padding: 20px 24px;
-      }
-
-      .agent-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin-bottom: 14px;
-      }
-
-      .agent-title {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        font-size: 15px;
-        font-weight: 600;
-      }
-
-      .status-dot {
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        background: #555;
-        transition: background 0.3s;
-      }
-
-      .status-dot.running { background: #4caf50; box-shadow: 0 0 6px #4caf50; }
-
-      .agent-controls { display: flex; gap: 10px; }
-
-      .btn-agent {
-        border: none;
-        border-radius: 20px;
-        padding: 7px 18px;
-        font-size: 13px;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        gap: 5px;
-        transition: opacity 0.2s;
-      }
-
-      .btn-start { background: #2e7d32; color: #fff; }
-      .btn-stop  { background: #c62828; color: #fff; }
-      .btn-agent:hover { opacity: 0.85; }
-      .btn-agent:disabled { opacity: 0.4; cursor: not-allowed; }
-
-      .log-box {
-        background: #131517;
-        border: 1px solid var(--border-color);
-        border-radius: 8px;
-        padding: 12px;
-        height: 160px;
-        overflow-y: auto;
-        font-size: 12px;
-        font-family: monospace;
-        color: #a8d5a2;
-        white-space: pre-wrap;
-      }
     </style>
   </head>
   <body>
@@ -179,82 +113,13 @@
         <h3>Ingredients To Video</h3>
         <p>Tạo video từ danh sách nguyên liệu.</p>
       </a>
-    </div>
 
-    <!-- Agent Control Panel -->
-    <div class="agent-panel">
-      <div class="agent-header">
-        <div class="agent-title">
-          <div class="status-dot" id="statusDot"></div>
-          <span>Auto Flow Agent</span>
-          <span id="statusText" style="font-weight:400; color: var(--text-dim); font-size:13px">Chưa chạy</span>
-        </div>
-        <div class="agent-controls">
-          <button class="btn-agent btn-start" id="btnStart" onclick="toggleAgent(true)">
-            <span class="material-symbols-outlined" style="font-size:16px">play_arrow</span> Start
-          </button>
-          <button class="btn-agent btn-stop" id="btnStop" onclick="toggleAgent(false)" disabled>
-            <span class="material-symbols-outlined" style="font-size:16px">stop</span> Stop
-          </button>
-        </div>
-      </div>
-      <div style="margin-bottom:14px; display:flex; gap:8px; align-items:center;">
-        <span class="material-symbols-outlined" style="font-size:18px; color:var(--text-dim)">folder</span>
-        <input
-          id="profileInput"
-          type="text"
-          placeholder="Đường dẫn profile Chrome, VD: C:\Users\...\Profile 51"
-          style="flex:1; background:#131517; border:1px solid var(--border-color); border-radius:8px;
-                 color:var(--text-main); padding:8px 12px; font-size:13px; outline:none;"
-        />
-      </div>
-      <div class="log-box" id="logBox">Nhấn Start để khởi động agent...</div>
+      <a href="/api/clone-channel" class="card">
+        <span class="material-symbols-outlined icon">content_copy</span>
+        <h3>Clone YouTube Channel</h3>
+        <p>Phân tích kênh đối thủ: video, tiêu đề, mô tả, tags, transcript.</p>
+      </a>
     </div>
 
   </body>
-  <script>
-    let logInterval = null;
-
-    async function toggleAgent(start) {
-      if (start) {
-        const profilePath = document.getElementById("profileInput").value.trim();
-        if (!profilePath) {
-          alert("Vui lòng nhập đường dẫn profile Chrome!");
-          return;
-        }
-        await fetch("/api/agent/start", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ profilePath }),
-        });
-        logInterval = setInterval(fetchLogs, 1500);
-      } else {
-        await fetch("/api/agent/stop", { method: "POST" });
-        clearInterval(logInterval);
-      }
-      checkStatus();
-    }
-
-    async function checkStatus() {
-      const res = await fetch("/api/agent/running");
-      const { running } = await res.json();
-      document.getElementById("statusDot").className = "status-dot" + (running ? " running" : "");
-      document.getElementById("statusText").textContent = running ? "Đang chạy" : "Đã dừng";
-      document.getElementById("btnStart").disabled = running;
-      document.getElementById("btnStop").disabled = !running;
-      if (running && !logInterval) logInterval = setInterval(fetchLogs, 1500);
-      if (!running) { clearInterval(logInterval); logInterval = null; }
-    }
-
-    async function fetchLogs() {
-      const res = await fetch("/api/agent/logs");
-      const { logs } = await res.json();
-      const box = document.getElementById("logBox");
-      box.textContent = logs.length ? logs.join("\n") : "Chưa có log...";
-      box.scrollTop = box.scrollHeight;
-    }
-
-    // Kiểm tra trạng thái khi load trang
-    checkStatus();
-  </script>
 </html>

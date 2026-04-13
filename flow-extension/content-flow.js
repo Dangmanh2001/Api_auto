@@ -293,6 +293,166 @@ async function waitForVideos(expectedCount, log, tilesBeforeOverride = null) {
   }
 }
 
+// ==================== SETUP IMAGE PAGE ====================
+
+async function setupImagePage(aspectRatio, modelType) {
+  // Đợi login nếu cần
+  if (location.href.includes("accounts.google.com")) {
+    console.log("⚠️ Cần đăng nhập...");
+    await waitForCondition(
+      () => !location.href.includes("accounts.google.com"),
+      5 * 60 * 1000,
+    );
+  }
+
+  // Đợi nút Dự án mới
+  await waitForCondition(() => !!findButtonByText("Dự án mới"));
+  const newBtn = findButtonByText("Dự án mới");
+  newBtn.scrollIntoView({ block: "center" });
+  await realClick(newBtn);
+  console.log("Đã click Dự án mới");
+  await sleep(600);
+
+  try {
+    // Mở menu chính (nút bên trái nút Tạo)
+    const menuBtn = await waitForXPath(
+      '//button[.//span[text()="Tạo"]]/preceding-sibling::button',
+    );
+    await realClick(menuBtn).catch(() => console.log("Menu có vẻ đã mở"));
+    await sleep(600);
+
+    // Tab Hình ảnh
+    const imageTab = await waitForXPath(
+      '//button[contains(@class,"flow_tab_slider_trigger") and contains(.,"Hình ảnh")]',
+    );
+    await realClick(imageTab);
+
+    // Đợi panel ổn định — chờ dropdown model xuất hiện
+    await waitForCondition(
+      () =>
+        !![...document.querySelectorAll("button")].find(
+          (b) =>
+            b.getAttribute("aria-haspopup") === "menu" &&
+            b.textContent?.includes("Nano Banana"),
+        ),
+      15000,
+    );
+    await sleep(300);
+
+    // Chọn model TRƯỚC (panel đóng sau khi chọn ratio)
+    const dropdownBtn = [...document.querySelectorAll("button")].find(
+      (b) =>
+        b.getAttribute("aria-haspopup") === "menu" &&
+        b.textContent?.includes("Nano Banana"),
+    );
+    await realClick(dropdownBtn);
+    await waitForCondition(
+      () => !!document.querySelector("div[role='menu'][data-state='open']"),
+    );
+    await sleep(300);
+
+    await waitForCondition(
+      () =>
+        !![...document.querySelectorAll("div[role='menu'] button")].find((b) =>
+          b.textContent?.includes(modelType),
+        ),
+    );
+    const optionEl = [...document.querySelectorAll("div[role='menu'] button")].find(
+      (b) => b.textContent?.includes(modelType),
+    );
+    await realClick(optionEl);
+    console.log("✅ Đã chọn Model:", modelType);
+    await sleep(400);
+
+    // Chọn x1
+    await waitForCondition(() => !!findButtonByText("x1"));
+    await realClick(findButtonByText("x1"));
+    console.log("✅ Đã chọn x1");
+    await sleep(300);
+
+    // Chọn tỉ lệ khung hình SAU CÙNG (có thể đóng panel)
+    await waitForCondition(() => !!findButtonByText(aspectRatio));
+    const ratioBtn = findButtonByText(aspectRatio);
+    await clickAndVerify(ratioBtn, `Chọn ${aspectRatio}`);
+    await sleep(400);
+  } catch (e) {
+    console.log("Setup lỗi nhỏ, tiếp tục:", e.message);
+  }
+
+  console.log("✅ Setup Image xong, bắt đầu render...");
+}
+
+// ==================== WAIT FOR IMAGES ====================
+
+function getImageTileCount() {
+  const items = document.querySelectorAll("[data-item-index]");
+  if (!items.length) return 0;
+  const maxIndex = Math.max(
+    ...[...items].map((el) =>
+      parseInt(el.getAttribute("data-item-index") || "0"),
+    ),
+  );
+  return maxIndex + 1;
+}
+
+async function waitForImages(expectedCount, log, tilesBefore = 0) {
+  const expectedTiles = tilesBefore + expectedCount;
+  let stableCount = 0;
+  const STABLE_NEEDED = 3;
+  const TIMEOUT_MS = 5 * 60 * 1000;
+  const startTime = Date.now();
+  let lastLogTiles = -1;
+
+  log(`⏳ Chờ render ảnh: ${tilesBefore} → ${expectedTiles} tiles`);
+
+  while (true) {
+    await sleep(rnd(2000, 4000));
+
+    if (Date.now() - startTime > TIMEOUT_MS) {
+      log("⏰ Timeout 5 phút — bỏ qua");
+      break;
+    }
+
+    const currentTiles = getImageTileCount();
+    if (currentTiles !== lastLogTiles) {
+      log(`📊 Tiles: ${currentTiles}/${expectedTiles}`);
+      lastLogTiles = currentTiles;
+    }
+
+    // Bấm Thử lại nếu có
+    const retryBtns = [...document.querySelectorAll("button")].filter(
+      (b) =>
+        b.textContent?.includes("Thử lại") ||
+        b.querySelector("i")?.textContent?.trim() === "refresh",
+    );
+    if (retryBtns.length > 0) {
+      stableCount = 0;
+      log(`⚠️ Phát hiện ${retryBtns.length} ảnh lỗi, đang Thử lại...`);
+      await realClick(retryBtns[0]);
+      await sleep(rnd(1500, 3000));
+      continue;
+    }
+
+    const isLoading =
+      !!document.querySelector(
+        '[class*="generating"], [class*="spinner"], [aria-busy="true"]',
+      ) ||
+      [...document.querySelectorAll("*")]
+        .filter((el) => el.childElementCount === 0 && el.textContent)
+        .some((el) => /^\d+%$/.test(el.textContent.trim()));
+
+    if (isLoading) {
+      stableCount = 0;
+    } else {
+      stableCount++;
+      if (stableCount >= STABLE_NEEDED && currentTiles >= expectedTiles) {
+        log("✅ Render ảnh xong!");
+        break;
+      }
+    }
+  }
+}
+
 // ==================== TASK RUNNERS ====================
 
 async function runTextToVideo(params, log) {
@@ -407,6 +567,42 @@ async function runImageToVideo(params, log, serverUrl) {
     }
 
     await waitForVideos(batch.length, log, tilesBefore);
+    log("🚀 Batch xong!");
+  }
+}
+
+async function runTextToImage(params, log) {
+  const { aspectRatio, modelType, promptList } = params;
+  await setupImagePage(aspectRatio, modelType);
+  blockEditNavigation();
+
+  const tilesBefore = getImageTileCount();
+  const BATCH_SIZE = rnd(3, 5);
+
+  for (let i = 0; i < promptList.length; i += BATCH_SIZE) {
+    const batch = promptList.slice(i, i + BATCH_SIZE);
+    log(`📦 Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${batch.length} prompt`);
+
+    for (const prompt of batch) {
+      const textbox = await waitFor('[role="textbox"]');
+      await sleep(rnd(300, 700));
+      await humanType(textbox, prompt);
+      await sleep(rnd(500, 1200));
+
+      const createBtn =
+        [...document.querySelectorAll("button")].find(
+          (b) => b.querySelector("i")?.textContent?.trim() === "arrow_forward",
+        ) ||
+        [...document.querySelectorAll("button")].find(
+          (b) => b.textContent?.trim() === "Tạo",
+        );
+
+      if (createBtn) await realClick(createBtn);
+      log(`✅ Đã gửi prompt: ${prompt.substring(0, 40)}...`);
+      await sleep(rnd(1200, 2500));
+    }
+
+    await waitForImages(batch.length, log, tilesBefore);
     log("🚀 Batch xong!");
   }
 }
@@ -531,6 +727,7 @@ chrome.runtime.onConnect.addListener((port) => {
         await runImageToVideo(params, log, serverUrl);
       else if (type === "ingredients-to-video")
         await runIngredientsToVideo(params, log, serverUrl);
+      else if (type === "text-to-image") await runTextToImage(params, log);
       else throw new Error(`Không biết task type: ${type}`);
 
       port.postMessage({ type: "done" });

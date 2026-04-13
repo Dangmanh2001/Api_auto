@@ -14,7 +14,9 @@ module.exports = {
 
       // Map files theo index: start_images[0], end_images[0], start_images[1], ...
       const fileMap = {};
-      (req.files || []).forEach((f) => { fileMap[f.fieldname] = f; });
+      (req.files || []).forEach((f) => {
+        fileMap[f.fieldname] = f;
+      });
 
       // prompts có thể là object {0: "...", 1: "..."} hoặc array
       const promptsRaw = req.body.prompts || {};
@@ -23,7 +25,9 @@ module.exports = {
       let i = 0;
       while (true) {
         const startFile = fileMap[`start_images[${i}]`];
-        const prompt = Array.isArray(promptsRaw) ? promptsRaw[i] : promptsRaw[String(i)];
+        const prompt = Array.isArray(promptsRaw)
+          ? promptsRaw[i]
+          : promptsRaw[String(i)];
         if (!startFile || !prompt) break;
         const endFile = fileMap[`end_images[${i}]`];
         tasks.push({
@@ -36,7 +40,9 @@ module.exports = {
       }
 
       if (tasks.length === 0) {
-        return res.send(`<script>alert("Không có task hợp lệ!"); window.history.back();</script>`);
+        return res.send(
+          `<script>alert("Không có task hợp lệ!"); window.history.back();</script>`,
+        );
       }
 
       const taskPayload = tasks.map((t) => ({
@@ -45,7 +51,11 @@ module.exports = {
         endImageName: t.endImage ? path.basename(t.endImage) : null,
       }));
 
-      taskQueue.create("image-to-video", { aspectRatio, modelType, tasks: taskPayload }, agentId);
+      taskQueue.create(
+        "image-to-video",
+        { aspectRatio, modelType, tasks: taskPayload },
+        agentId,
+      );
       return res.redirect("/api/imageToVideo");
     } catch (error) {
       console.error("❌ Lỗi tạo task:", error.message);
