@@ -322,28 +322,21 @@ async function setupImagePage(aspectRatio, modelType) {
     await sleep(600);
 
     // Tab Hình ảnh
-    const imageTab = await waitForXPath(
-      '//button[contains(@class,"flow_tab_slider_trigger") and contains(.,"Hình ảnh")]',
+    const videoTab = await waitFor(
+      'button.flow_tab_slider_trigger[aria-controls*="IMAGE"]',
     );
-    await realClick(imageTab);
+    await realClick(videoTab);
+    await sleep(400);
 
-    // Đợi panel ổn định — chờ dropdown model xuất hiện
-    await waitForCondition(
-      () =>
-        !![...document.querySelectorAll("button")].find(
-          (b) =>
-            b.getAttribute("aria-haspopup") === "menu" &&
-            b.textContent?.includes("Nano Banana"),
-        ),
-      15000,
-    );
-    await sleep(300);
+    // Chọn tỉ lệ khung hình
+    await waitForCondition(() => !!findButtonByText(aspectRatio));
+    const ratioBtn = findButtonByText(aspectRatio);
+    await clickAndVerify(ratioBtn, `Chọn ${aspectRatio}`);
+    await sleep(400);
 
-    // Chọn model TRƯỚC (panel đóng sau khi chọn ratio)
-    const dropdownBtn = [...document.querySelectorAll("button")].find(
-      (b) =>
-        b.getAttribute("aria-haspopup") === "menu" &&
-        b.textContent?.includes("Nano Banana"),
+    // Chọn model từ dropdown
+    const dropdownBtn = await waitForXPath(
+      '//button[@aria-haspopup="menu" and .//i[text()="arrow_drop_down"]]',
     );
     await realClick(dropdownBtn);
     await waitForCondition(
@@ -351,30 +344,17 @@ async function setupImagePage(aspectRatio, modelType) {
     );
     await sleep(300);
 
-    await waitForCondition(
-      () =>
-        !![...document.querySelectorAll("div[role='menu'] button")].find((b) =>
-          b.textContent?.includes(modelType),
-        ),
-    );
-    const optionEl = [...document.querySelectorAll("div[role='menu'] button")].find(
-      (b) => b.textContent?.includes(modelType),
+    const optionEl = await waitForXPath(
+      `//div[@role='menuitem']//span[contains(text(), '${modelType}')]`,
     );
     await realClick(optionEl);
-    console.log("✅ Đã chọn Model:", modelType);
+    console.log("✅ Đã chọn Model");
     await sleep(400);
 
     // Chọn x1
     await waitForCondition(() => !!findButtonByText("x1"));
     await realClick(findButtonByText("x1"));
-    console.log("✅ Đã chọn x1");
     await sleep(300);
-
-    // Chọn tỉ lệ khung hình SAU CÙNG (có thể đóng panel)
-    await waitForCondition(() => !!findButtonByText(aspectRatio));
-    const ratioBtn = findButtonByText(aspectRatio);
-    await clickAndVerify(ratioBtn, `Chọn ${aspectRatio}`);
-    await sleep(400);
   } catch (e) {
     console.log("Setup lỗi nhỏ, tiếp tục:", e.message);
   }
