@@ -5,6 +5,7 @@
   "scripts": {
     "start": "nodemon ./bin/www",
     "electron": "electron main.js",
+    "youtube-profile": "electron ./youtube_profile",
     "build": "electron-builder --win --x64"
   },
   "main": "main.js",

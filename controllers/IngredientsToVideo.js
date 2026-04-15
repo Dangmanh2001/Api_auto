@@ -10,6 +10,8 @@ module.exports = {
       const aspectRatio = req.body.aspectRatio;
       const modelType = req.body.modelType;
       const agentId = req.body.agentId || null;
+      if (!agentId) return res.redirect("/api/IngredientsToVideo");
+
       const prompts = req.body.prompts;
       const promptList = Array.isArray(prompts) ? prompts : [prompts];
 

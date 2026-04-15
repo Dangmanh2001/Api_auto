@@ -13,6 +13,8 @@ module.exports = {
       const aspectRatio = req.body.aspectRatio;
       const modelType = req.body.modelType;
       const agentId = req.body.agentId || null;
+      if (!agentId) return res.redirect("/api");
+
       const rawPrompts = req.body.prompts;
       const promptList = rawPrompts
         ? rawPrompts

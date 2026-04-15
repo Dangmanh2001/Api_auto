@@ -9,6 +9,8 @@ module.exports = {
   ImageToVideoPost: async (req, res) => {
     try {
       const agentId = req.body.agentId || null;
+      if (!agentId) return res.redirect("/api/imageToVideo");
+
       const aspectRatio = req.body.aspectRatio;
       const modelType = req.body.modelType;
 

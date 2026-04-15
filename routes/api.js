@@ -36,12 +36,8 @@ function tryDispatchTask(agentId) {
 taskQueue.on("created", (task) => {
   if (task.targetAgent) {
     tryDispatchTask(task.targetAgent);
-  } else {
-    // Broadcast cho agent rảnh bất kỳ
-    for (const agentId of agentTaskSseClients.keys()) {
-      if (tryDispatchTask(agentId)) break;
-    }
   }
+  // Không có targetAgent → bỏ qua, không gửi cho máy khác
 });
 
 // Lắng nghe log từ taskQueue để broadcast cho UI qua SSE
