@@ -607,18 +607,35 @@ async function runIngredientsToVideo(params, log, serverUrl) {
 
   async function selectImageForSlot(name) {
     await waitForCondition(() => !!findPickerBtn(), 15000);
-    findPickerBtn().click();
+    await realClick(findPickerBtn());
     log(`Đã click picker Tạo`);
+    await sleep(rnd(400, 700));
 
+    // Đợi ô search xuất hiện rồi mới gõ
+    const searchInput = await waitFor(
+      'input[type="text"][placeholder="Tìm kiếm các thành phần"]',
+      10000,
+    );
+
+    // Focus + clear, sau đó gõ bằng CDP để React nhận keyboard events và trigger filter
+    await realClick(searchInput);
+    await sleep(200);
+    setReactInputValue(searchInput, "");
+    await sleep(100);
+    await humanType(searchInput, name);
+    await sleep(rnd(500, 900));
+
+    // Đợi ảnh khớp tên xuất hiện sau khi filter
     await waitForCondition(
       () =>
         [...document.querySelectorAll("img")].some((img) => img.alt === name),
-      10000,
+      15000,
     );
     const img = [...document.querySelectorAll("img")].find(
       (img) => img.alt === name,
     );
-    img.click();
+    if (!img) throw new Error(`Không tìm thấy ảnh: ${name}`);
+    await realClick(img);
     log(`Đã chọn: ${name}`);
     await sleep(rnd(800, 1200));
   }

@@ -273,6 +273,181 @@
         padding: 10px;
       }
 
+      /* ===== DROP ZONE ===== */
+      .drop-zone {
+        border: 2px dashed var(--border-color);
+        border-radius: 12px;
+        padding: 16px;
+        margin-bottom: 16px;
+        transition: border-color 0.2s, background 0.2s;
+      }
+      .drop-zone.drag-over {
+        border-color: var(--accent-blue);
+        background: rgba(77, 148, 255, 0.05);
+      }
+      .drop-area {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        padding: 12px;
+        color: var(--text-dim);
+        font-size: 13px;
+      }
+      .drop-area p { margin: 0; }
+      .btn-browse {
+        background: none;
+        border: 1px solid var(--border-color);
+        color: var(--text-main);
+        padding: 6px 16px;
+        border-radius: 20px;
+        cursor: pointer;
+        font-size: 13px;
+        margin-top: 4px;
+      }
+      .btn-browse:hover { background: #2a2e34; }
+      .drop-preview {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .drop-preview-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 13px;
+        color: var(--text-dim);
+      }
+      .btn-add-more-drop {
+        background: none;
+        border: 1px solid var(--border-color);
+        color: var(--text-dim);
+        padding: 3px 10px;
+        border-radius: 12px;
+        font-size: 12px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .btn-add-more-drop:hover { background: #2a2e34; }
+      .drop-thumbs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        max-height: 160px;
+        overflow-y: auto;
+      }
+      .drop-thumb-item {
+        position: relative;
+        flex-shrink: 0;
+      }
+      .drop-thumb-item img {
+        width: 88px;
+        height: 54px;
+        object-fit: cover;
+        border-radius: 6px;
+        border: 1px solid var(--border-color);
+        display: block;
+      }
+      .drop-thumb-item .thumb-order {
+        position: absolute;
+        bottom: 3px;
+        left: 4px;
+        background: rgba(0,0,0,0.65);
+        color: #fff;
+        font-size: 10px;
+        padding: 1px 4px;
+        border-radius: 4px;
+        pointer-events: none;
+      }
+      .drop-thumb-item .remove-thumb {
+        position: absolute;
+        top: -5px;
+        right: -5px;
+        width: 17px;
+        height: 17px;
+        background: #e53935;
+        border-radius: 50%;
+        border: none;
+        color: #fff;
+        font-size: 11px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+      }
+      .drop-config {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .drop-config label {
+        font-size: 13px;
+        color: var(--text-dim);
+        white-space: nowrap;
+      }
+      .per-ing-btns {
+        display: flex;
+        gap: 6px;
+      }
+      .per-ing-btn {
+        background: none;
+        border: 1px solid var(--border-color);
+        color: var(--text-dim);
+        width: 34px;
+        height: 34px;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.15s;
+      }
+      .per-ing-btn:hover { background: #2a2e34; }
+      .per-ing-btn.active {
+        border-color: var(--accent-blue);
+        color: var(--accent-blue);
+        background: rgba(77,148,255,0.1);
+      }
+      .drop-hint {
+        font-size: 12px;
+        color: var(--text-dim);
+        margin-left: auto;
+      }
+      .drop-actions {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .btn-apply-drop {
+        background: var(--accent-blue);
+        border: none;
+        color: #fff;
+        padding: 8px 20px;
+        border-radius: 8px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        font-family: inherit;
+      }
+      .btn-apply-drop:hover { background: #3a7fe0; }
+      .btn-clear-drop {
+        background: none;
+        border: 1px solid var(--border-color);
+        color: var(--text-dim);
+        padding: 8px 16px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 13px;
+      }
+      .btn-clear-drop:hover { background: #2a2e34; }
+      /* ===== END DROP ZONE ===== */
+
       @media (max-width: 640px) {
         body {
           padding: 12px;
@@ -326,6 +501,47 @@
         method="POST"
         enctype="multipart/form-data"
       >
+        <!-- ===== DROP ZONE ===== -->
+        <div id="dropZone" class="drop-zone">
+          <div class="drop-area" id="dropArea">
+            <span class="material-symbols-outlined" style="font-size:36px">burst_mode</span>
+            <p>Kéo thả nhiều ảnh để tự động tạo Ingredients</p>
+            <input type="file" id="dropFileInput" multiple accept="image/*" style="display:none" onchange="handleDropFileSelect(this)" />
+            <button type="button" class="btn-browse" onclick="document.getElementById('dropFileInput').click()">Chọn ảnh</button>
+          </div>
+
+          <div class="drop-preview" id="dropPreview" style="display:none">
+            <div class="drop-preview-header">
+              <span id="dropCountLabel">0 ảnh</span>
+              <button type="button" class="btn-add-more-drop" onclick="document.getElementById('dropFileInputMore').click()">
+                <span class="material-symbols-outlined" style="font-size:14px">add</span> Thêm ảnh
+              </button>
+              <input type="file" id="dropFileInputMore" multiple accept="image/*" style="display:none" onchange="handleDropFileSelect(this)" />
+            </div>
+
+            <div class="drop-thumbs" id="dropThumbs"></div>
+
+            <div class="drop-config">
+              <label>Ảnh mỗi ingredient:</label>
+              <div class="per-ing-btns">
+                <button type="button" class="per-ing-btn" data-n="1" onclick="setPerIngredient(1)">1</button>
+                <button type="button" class="per-ing-btn" data-n="2" onclick="setPerIngredient(2)">2</button>
+                <button type="button" class="per-ing-btn active" data-n="3" onclick="setPerIngredient(3)">3</button>
+              </div>
+              <span class="drop-hint" id="dropHint"></span>
+            </div>
+
+            <div class="drop-actions">
+              <button type="button" class="btn-apply-drop" id="btnApplyDrop" onclick="applyDropped()">
+                <span class="material-symbols-outlined" style="font-size:16px">auto_fix_high</span>
+                Tạo Ingredients
+              </button>
+              <button type="button" class="btn-clear-drop" onclick="clearDropped()">Xóa ảnh</button>
+            </div>
+          </div>
+        </div>
+        <!-- ===== END DROP ZONE ===== -->
+
         <div id="ingredientList">
           <div class="ingredient-card">
             <div class="card-header">
@@ -486,6 +702,161 @@
           });
         });
       }
+      // ===== DROP ZONE LOGIC =====
+      let droppedFiles = [];
+      let perIngredient = 3;
+
+      const dropZoneEl = document.getElementById("dropZone");
+      dropZoneEl.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        dropZoneEl.classList.add("drag-over");
+      });
+      dropZoneEl.addEventListener("dragleave", (e) => {
+        if (!dropZoneEl.contains(e.relatedTarget))
+          dropZoneEl.classList.remove("drag-over");
+      });
+      dropZoneEl.addEventListener("drop", (e) => {
+        e.preventDefault();
+        dropZoneEl.classList.remove("drag-over");
+        const files = [...e.dataTransfer.files].filter((f) =>
+          f.type.startsWith("image/"),
+        );
+        if (files.length) { droppedFiles.push(...files); renderDropped(); }
+      });
+
+      function handleDropFileSelect(input) {
+        const files = [...input.files].filter((f) => f.type.startsWith("image/"));
+        if (files.length) { droppedFiles.push(...files); renderDropped(); }
+        input.value = "";
+      }
+
+      function setPerIngredient(n) {
+        perIngredient = n;
+        document.querySelectorAll(".per-ing-btn").forEach((btn) => {
+          btn.classList.toggle("active", parseInt(btn.dataset.n) === n);
+        });
+        updateDropHint();
+      }
+
+      function updateDropHint() {
+        const total = droppedFiles.length;
+        const ingCount = Math.ceil(total / perIngredient);
+        document.getElementById("dropHint").textContent =
+          total > 0 ? `→ ${ingCount} ingredient${ingCount !== 1 ? "s" : ""}` : "";
+        const btn = document.getElementById("btnApplyDrop");
+        btn.innerHTML = `<span class="material-symbols-outlined" style="font-size:16px">auto_fix_high</span> Tạo ${ingCount} Ingredient${ingCount !== 1 ? "s" : ""}`;
+      }
+
+      function renderDropped() {
+        const previewDiv = document.getElementById("dropPreview");
+        const dropAreaEl = document.getElementById("dropArea");
+        const thumbsDiv = document.getElementById("dropThumbs");
+        const countLabel = document.getElementById("dropCountLabel");
+
+        if (droppedFiles.length === 0) {
+          previewDiv.style.display = "none";
+          dropAreaEl.style.display = "flex";
+          return;
+        }
+        previewDiv.style.display = "flex";
+        dropAreaEl.style.display = "none";
+        countLabel.textContent = `${droppedFiles.length} ảnh`;
+
+        thumbsDiv.innerHTML = "";
+        droppedFiles.forEach((file, i) => {
+          const url = URL.createObjectURL(file);
+          const item = document.createElement("div");
+          item.className = "drop-thumb-item";
+          item.innerHTML = `
+            <img src="${url}" title="${file.name}" />
+            <span class="thumb-order">${i + 1}</span>
+            <button class="remove-thumb" type="button" onclick="removeDroppedFile(${i})">×</button>
+          `;
+          thumbsDiv.appendChild(item);
+        });
+        updateDropHint();
+      }
+
+      function removeDroppedFile(idx) {
+        droppedFiles.splice(idx, 1);
+        renderDropped();
+      }
+
+      function clearDropped() {
+        droppedFiles = [];
+        renderDropped();
+      }
+
+      function applyDropped() {
+        if (droppedFiles.length === 0) return;
+
+        // Chia files thành từng nhóm theo perIngredient
+        const chunks = [];
+        for (let i = 0; i < droppedFiles.length; i += perIngredient) {
+          chunks.push(droppedFiles.slice(i, i + perIngredient));
+        }
+
+        // Lấy các card rỗng (chưa có file nào)
+        const emptyCards = [
+          ...document.querySelectorAll(".ingredient-card"),
+        ].filter((card) => {
+          const inputs = card.querySelectorAll('input[type="file"]');
+          return [...inputs].every((inp) => inp.files.length === 0);
+        });
+
+        let emptyIdx = 0;
+        for (const chunk of chunks) {
+          let card;
+          if (emptyIdx < emptyCards.length) {
+            card = emptyCards[emptyIdx++];
+          } else {
+            addIngredient();
+            const all = document.querySelectorAll(".ingredient-card");
+            card = all[all.length - 1];
+          }
+          fillIngredientCard(card, chunk);
+        }
+
+        clearDropped();
+      }
+
+      function fillIngredientCard(card, files) {
+        const boxes = card.querySelectorAll(".upload-box");
+        files.forEach((file, i) => {
+          if (i >= boxes.length) return;
+          const box = boxes[i];
+          const input = box.querySelector('input[type="file"]');
+          // Gán file vào input
+          const dt = new DataTransfer();
+          dt.items.add(file);
+          input.files = dt.files;
+          // Hiển thị preview
+          previewFileInBox(box, file);
+        });
+      }
+
+      function previewFileInBox(box, file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          let img = box.querySelector(".preview-img");
+          if (!img) {
+            img = document.createElement("img");
+            img.className = "preview-img";
+            box.appendChild(img);
+          }
+          img.src = e.target.result;
+          box.querySelectorAll("span").forEach((s) => (s.style.visibility = "hidden"));
+          const input = box.querySelector("input");
+          if (input) {
+            input.style.position = "absolute";
+            input.style.opacity = "0";
+            input.style.zIndex = "11";
+          }
+        };
+        reader.readAsDataURL(file);
+      }
+      // ===== END DROP ZONE LOGIC =====
+
       function handlePreview(input) {
         if (input.files && input.files[0]) {
           const reader = new FileReader();

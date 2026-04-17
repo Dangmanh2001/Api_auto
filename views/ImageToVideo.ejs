@@ -288,6 +288,177 @@
         border-color: var(--accent-blue);
       }
 
+      /* ===== DROP ZONE ===== */
+      .drop-zone {
+        margin-bottom: 20px;
+        border: 2px dashed var(--border-color);
+        border-radius: 16px;
+        padding: 16px;
+        transition: border-color 0.2s, background 0.2s;
+      }
+      .drop-zone.drag-over {
+        border-color: var(--accent-blue);
+        background: rgba(77, 148, 255, 0.06);
+      }
+      .drop-area {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        padding: 12px;
+        cursor: default;
+        color: var(--text-dim);
+        font-size: 13px;
+      }
+      .drop-area p { margin: 0; }
+      .btn-browse {
+        background: none;
+        border: 1px solid var(--border-color);
+        color: var(--text-main);
+        padding: 6px 16px;
+        border-radius: 20px;
+        cursor: pointer;
+        font-size: 13px;
+        margin-top: 4px;
+      }
+      .btn-browse:hover { background: #333; }
+      .drop-preview {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .drop-preview-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 13px;
+        color: var(--text-dim);
+        padding: 0 2px;
+      }
+      .btn-add-more {
+        background: none;
+        border: 1px solid var(--border-color);
+        color: var(--text-dim);
+        padding: 3px 10px;
+        border-radius: 12px;
+        font-size: 12px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .btn-add-more:hover { background: #2a2e34; }
+      .drop-thumbs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        max-height: 170px;
+        overflow-y: auto;
+        padding: 2px;
+      }
+      .drop-thumb-item {
+        position: relative;
+        flex-shrink: 0;
+      }
+      .drop-thumb-item img {
+        width: 88px;
+        height: 54px;
+        object-fit: cover;
+        border-radius: 6px;
+        border: 1px solid var(--border-color);
+        display: block;
+      }
+      .drop-thumb-item .thumb-order {
+        position: absolute;
+        bottom: 3px;
+        left: 4px;
+        background: rgba(0,0,0,0.65);
+        color: #fff;
+        font-size: 10px;
+        padding: 1px 4px;
+        border-radius: 4px;
+        pointer-events: none;
+      }
+      .drop-thumb-item .remove-thumb {
+        position: absolute;
+        top: -5px;
+        right: -5px;
+        width: 17px;
+        height: 17px;
+        background: #e53935;
+        border-radius: 50%;
+        border: none;
+        color: #fff;
+        font-size: 11px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 1;
+        padding: 0;
+      }
+      .drop-modes {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .mode-btn {
+        background: none;
+        border: 1px solid var(--border-color);
+        color: var(--text-dim);
+        padding: 6px 14px;
+        border-radius: 20px;
+        font-size: 12px;
+        cursor: pointer;
+        transition: all 0.15s;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .mode-btn:hover { background: #2a2e34; }
+      .mode-btn.active {
+        border-color: var(--accent-blue);
+        color: var(--accent-blue);
+        background: rgba(77,148,255,0.1);
+      }
+      .drop-actions {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .btn-apply-drop {
+        background: var(--accent-blue);
+        border: none;
+        color: #fff;
+        padding: 8px 20px;
+        border-radius: 20px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        font-family: inherit;
+      }
+      .btn-apply-drop:hover { background: #3a7fe0; }
+      .btn-clear-drop {
+        background: none;
+        border: 1px solid var(--border-color);
+        color: var(--text-dim);
+        padding: 8px 16px;
+        border-radius: 20px;
+        cursor: pointer;
+        font-size: 13px;
+      }
+      .btn-clear-drop:hover { background: #2a2e34; }
+      .drop-mode-hint {
+        font-size: 11px;
+        color: var(--text-dim);
+        margin-left: auto;
+        align-self: center;
+      }
+      /* ===== END DROP ZONE ===== */
+
       @media (max-width: 640px) {
         body {
           padding: 12px;
@@ -386,6 +557,56 @@
               tất cả
             </button>
           </div>
+
+          <!-- ===== DROP ZONE ===== -->
+          <div id="dropZone" class="drop-zone">
+            <!-- Trạng thái rỗng: hiện hướng dẫn kéo thả -->
+            <div class="drop-area" id="dropArea">
+              <span class="material-symbols-outlined" style="font-size:38px">upload_file</span>
+              <p>Kéo thả nhiều ảnh vào đây để tạo frames hàng loạt</p>
+              <input type="file" id="dropFileInput" multiple accept="image/*" style="display:none" onchange="handleFileSelect(this)" />
+              <button type="button" class="btn-browse" onclick="document.getElementById('dropFileInput').click()">Chọn ảnh</button>
+            </div>
+
+            <!-- Trạng thái có ảnh: hiện preview + cài đặt -->
+            <div class="drop-preview" id="dropPreview" style="display:none">
+              <div class="drop-preview-header">
+                <span id="dropCountLabel">0 ảnh</span>
+                <button type="button" class="btn-add-more" onclick="document.getElementById('dropFileInputMore').click()">
+                  <span class="material-symbols-outlined" style="font-size:14px">add</span> Thêm ảnh
+                </button>
+                <input type="file" id="dropFileInputMore" multiple accept="image/*" style="display:none" onchange="handleFileSelect(this)" />
+              </div>
+
+              <div class="drop-thumbs" id="dropThumbs"></div>
+
+              <!-- Chọn chế độ gán -->
+              <div class="drop-modes">
+                <button type="button" class="mode-btn active" data-mode="alternate" onclick="setDropMode('alternate')">
+                  <span class="material-symbols-outlined" style="font-size:15px">swap_horiz</span>
+                  Xen kẽ Start → End
+                </button>
+                <button type="button" class="mode-btn" data-mode="start" onclick="setDropMode('start')">
+                  <span class="material-symbols-outlined" style="font-size:15px">first_page</span>
+                  Chỉ Start
+                </button>
+                <button type="button" class="mode-btn" data-mode="end" onclick="setDropMode('end')">
+                  <span class="material-symbols-outlined" style="font-size:15px">last_page</span>
+                  Chỉ End
+                </button>
+                <span class="drop-mode-hint" id="dropModeHint"></span>
+              </div>
+
+              <div class="drop-actions">
+                <button type="button" class="btn-apply-drop" id="btnApplyDrop" onclick="applyDropped()">
+                  <span class="material-symbols-outlined" style="font-size:16px">auto_fix_high</span>
+                  Tạo frames
+                </button>
+                <button type="button" class="btn-clear-drop" onclick="clearDropped()">Xóa ảnh đã thả</button>
+              </div>
+            </div>
+          </div>
+          <!-- ===== END DROP ZONE ===== -->
 
           <div id="flowList">
             <div class="frame-group" data-index="0">
@@ -541,6 +762,180 @@
             reader.readAsDataURL(input.files[0]);
           }
         }
+
+        // ===== DROP ZONE LOGIC =====
+        let droppedFiles = [];
+        let dropMode = "alternate";
+
+        // Drag-over toàn drop zone
+        const dropZoneEl = document.getElementById("dropZone");
+        dropZoneEl.addEventListener("dragover", (e) => {
+          e.preventDefault();
+          dropZoneEl.classList.add("drag-over");
+        });
+        dropZoneEl.addEventListener("dragleave", (e) => {
+          if (!dropZoneEl.contains(e.relatedTarget))
+            dropZoneEl.classList.remove("drag-over");
+        });
+        dropZoneEl.addEventListener("drop", (e) => {
+          e.preventDefault();
+          dropZoneEl.classList.remove("drag-over");
+          const files = [...e.dataTransfer.files].filter((f) =>
+            f.type.startsWith("image/"),
+          );
+          if (files.length) {
+            droppedFiles.push(...files);
+            renderDropped();
+          }
+        });
+
+        function handleFileSelect(input) {
+          const files = [...input.files].filter((f) =>
+            f.type.startsWith("image/"),
+          );
+          if (files.length) {
+            droppedFiles.push(...files);
+            renderDropped();
+          }
+          input.value = "";
+        }
+
+        function setDropMode(mode) {
+          dropMode = mode;
+          document.querySelectorAll(".mode-btn").forEach((btn) => {
+            btn.classList.toggle("active", btn.dataset.mode === mode);
+          });
+          updateDropHint();
+        }
+
+        function computeFrameCount() {
+          if (dropMode === "alternate")
+            return Math.ceil(droppedFiles.length / 2);
+          return droppedFiles.length;
+        }
+
+        function updateDropHint() {
+          const hint = document.getElementById("dropModeHint");
+          const btn = document.getElementById("btnApplyDrop");
+          const n = droppedFiles.length;
+          const fc = computeFrameCount();
+          if (dropMode === "alternate") {
+            hint.textContent = `${n} ảnh → ${fc} frame (cặp Start+End)`;
+          } else if (dropMode === "start") {
+            hint.textContent = `${n} ảnh → ${fc} frame (mỗi ảnh là Start)`;
+          } else {
+            hint.textContent = `${n} ảnh → ${fc} frame (mỗi ảnh là End)`;
+          }
+          btn.innerHTML = `<span class="material-symbols-outlined" style="font-size:16px">auto_fix_high</span> Tạo ${fc} frame${fc !== 1 ? "s" : ""}`;
+        }
+
+        function renderDropped() {
+          const thumbsDiv = document.getElementById("dropThumbs");
+          const previewDiv = document.getElementById("dropPreview");
+          const dropAreaEl = document.getElementById("dropArea");
+          const countLabel = document.getElementById("dropCountLabel");
+
+          if (droppedFiles.length === 0) {
+            previewDiv.style.display = "none";
+            dropAreaEl.style.display = "flex";
+            return;
+          }
+
+          previewDiv.style.display = "flex";
+          dropAreaEl.style.display = "none";
+          countLabel.textContent = `${droppedFiles.length} ảnh`;
+
+          thumbsDiv.innerHTML = "";
+          droppedFiles.forEach((file, i) => {
+            const url = URL.createObjectURL(file);
+            const item = document.createElement("div");
+            item.className = "drop-thumb-item";
+            item.innerHTML = `
+              <img src="${url}" title="${file.name}" />
+              <span class="thumb-order">${i + 1}</span>
+              <button class="remove-thumb" type="button" onclick="removeDropped(${i})">×</button>
+            `;
+            thumbsDiv.appendChild(item);
+          });
+
+          updateDropHint();
+        }
+
+        function removeDropped(idx) {
+          droppedFiles.splice(idx, 1);
+          renderDropped();
+        }
+
+        function clearDropped() {
+          droppedFiles = [];
+          renderDropped();
+        }
+
+        function applyDropped() {
+          if (droppedFiles.length === 0) return;
+
+          // Build danh sách cặp (startFile, endFile) theo mode
+          const pairs = [];
+          if (dropMode === "start") {
+            droppedFiles.forEach((f) => pairs.push([f, null]));
+          } else if (dropMode === "end") {
+            droppedFiles.forEach((f) => pairs.push([null, f]));
+          } else {
+            for (let i = 0; i < droppedFiles.length; i += 2) {
+              pairs.push([droppedFiles[i], droppedFiles[i + 1] || null]);
+            }
+          }
+
+          // Lấy danh sách frame rỗng hiện có (chưa có file nào được chọn)
+          const emptyFrames = [
+            ...document.querySelectorAll("#flowList .frame-group"),
+          ].filter((f) => {
+            const s = f.querySelector('input[name^="start_images"]');
+            const e = f.querySelector('input[name^="end_images"]');
+            return (
+              (!s || s.files.length === 0) && (!e || e.files.length === 0)
+            );
+          });
+
+          let emptyIdx = 0;
+          for (const [startFile, endFile] of pairs) {
+            let frame;
+            if (emptyIdx < emptyFrames.length) {
+              // Tái dụng frame rỗng sẵn có (bắt đầu từ frame đầu tiên)
+              frame = emptyFrames[emptyIdx++];
+            } else {
+              // Hết frame rỗng → tạo thêm
+              addFullFrame();
+              const all = document.querySelectorAll("#flowList .frame-group");
+              frame = all[all.length - 1];
+            }
+            fillFrame(frame, startFile, endFile);
+          }
+
+          clearDropped();
+        }
+
+        function fillFrame(frame, startFile, endFile) {
+          if (startFile) {
+            const input = frame.querySelector('input[name^="start_images"]');
+            const img = frame.querySelector(
+              ".image-box:not(.end-frame-box) .thumbnail",
+            );
+            const dt = new DataTransfer();
+            dt.items.add(startFile);
+            input.files = dt.files;
+            img.src = URL.createObjectURL(startFile);
+          }
+          if (endFile) {
+            const input = frame.querySelector('input[name^="end_images"]');
+            const img = frame.querySelector(".end-frame-box .thumbnail");
+            const dt = new DataTransfer();
+            dt.items.add(endFile);
+            input.files = dt.files;
+            img.src = URL.createObjectURL(endFile);
+          }
+        }
+        // ===== END DROP ZONE LOGIC =====
       </script>
     </div>
     <script src="/javascripts/spa.js"></script>

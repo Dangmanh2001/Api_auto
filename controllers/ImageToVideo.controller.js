@@ -1,6 +1,9 @@
 const path = require("path");
 const taskQueue = require("../utils/taskQueue");
 
+const DEFAULT_PROMPT =
+  "A cinematic video, smooth camera movement, high quality, detailed, 4K resolution, realistic lighting, professional composition";
+
 module.exports = {
   ImageToVideo: async (req, res) => {
     res.render("ImageToVideo.ejs");
@@ -8,8 +11,7 @@ module.exports = {
 
   ImageToVideoPost: async (req, res) => {
     try {
-      const agentId = req.body.agentId || null;
-      if (!agentId) return res.redirect("/api/imageToVideo");
+      const agentId = req.agentId || req.body.agentId || null;
 
       const aspectRatio = req.body.aspectRatio;
       const modelType = req.body.modelType;
@@ -27,10 +29,11 @@ module.exports = {
       let i = 0;
       while (true) {
         const startFile = fileMap[`start_images[${i}]`];
-        const prompt = Array.isArray(promptsRaw)
+        if (!startFile) break;
+        const promptRaw = Array.isArray(promptsRaw)
           ? promptsRaw[i]
           : promptsRaw[String(i)];
-        if (!startFile || !prompt) break;
+        const prompt = (promptRaw || "").trim() || DEFAULT_PROMPT;
         const endFile = fileMap[`end_images[${i}]`];
         tasks.push({
           id: i + 1,
@@ -61,7 +64,7 @@ module.exports = {
       return res.redirect("/api/imageToVideo");
     } catch (error) {
       console.error("❌ Lỗi tạo task:", error.message);
-      return res.status(500).json({ success: false, message: error.message });
+      return res.send(`<script>alert("Lỗi: ${error.message}"); window.history.back();</script>`);
     }
   },
 };

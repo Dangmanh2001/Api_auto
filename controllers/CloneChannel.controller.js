@@ -204,7 +204,7 @@ async function fetchVideoDetail(videoId) {
 // ===================== EXPORTS =====================
 
 module.exports = {
-  getPage: (_req, res) => res.render("CloneChannel"),
+  getPage: (req, res) => res.render("CloneChannel", { error: req.query.error || null }),
 
   // GET /api/clone-channel/fetch?channel=...&continuation=...
   fetchChannel: async (req, res) => {

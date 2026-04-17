@@ -5,10 +5,16 @@ let isBusy = false;
 
 // Lấy agentId từ background
 chrome.runtime.sendMessage({ action: "get-agent-id" }, (res) => {
+  if (chrome.runtime.lastError) {
+    console.error("❌ Lỗi kết nối Extension:", chrome.runtime.lastError.message);
+    showBadge("red", "❌ Lỗi Extension");
+    return;
+  }
+
   agentId = res?.agentId || "unknown";
   showBadge("green", `✅ Agent: ${agentId}`);
   injectAgentId();
-  setupTaskStream();
+  if (agentId !== "unknown") setupTaskStream();
 });
 
 function showBadge(color, text) {
@@ -29,6 +35,8 @@ function showBadge(color, text) {
 }
 
 function injectAgentId() {
+  if (!agentId) return; // Không làm gì nếu chưa lấy được agentId
+
   document.querySelectorAll("form").forEach((form) => {
     let input = form.querySelector('input[name="agentId"]');
     if (!input) {

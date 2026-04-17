@@ -12,16 +12,17 @@ module.exports = {
     try {
       const aspectRatio = req.body.aspectRatio;
       const modelType = req.body.modelType;
-      const agentId = req.body.agentId || null;
-      if (!agentId) return res.redirect("/api");
+      const agentId = req.agentId || req.body.agentId || null;
 
+      const DEFAULT_PROMPT =
+        "A cinematic video, smooth camera movement, high quality, detailed, 4K resolution, realistic lighting, professional composition";
       const rawPrompts = req.body.prompts;
       const promptList = rawPrompts
         ? rawPrompts
             .split("\n")
-            .map((p) => p.trim())
+            .map((p) => p.trim() || DEFAULT_PROMPT)
             .filter((p) => p !== "")
-        : [];
+        : [DEFAULT_PROMPT];
 
       taskQueue.create(
         "text-to-video",
@@ -31,7 +32,7 @@ module.exports = {
       return res.redirect("/api");
     } catch (error) {
       console.error("❌ Lỗi tạo task:", error.message);
-      return res.status(500).json({ success: false, message: error.message });
+      return res.send(`<script>alert("Lỗi: ${error.message}"); window.history.back();</script>`);
     }
   },
 
