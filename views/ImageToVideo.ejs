@@ -294,7 +294,9 @@
         border: 2px dashed var(--border-color);
         border-radius: 16px;
         padding: 16px;
-        transition: border-color 0.2s, background 0.2s;
+        transition:
+          border-color 0.2s,
+          background 0.2s;
       }
       .drop-zone.drag-over {
         border-color: var(--accent-blue);
@@ -310,7 +312,9 @@
         color: var(--text-dim);
         font-size: 13px;
       }
-      .drop-area p { margin: 0; }
+      .drop-area p {
+        margin: 0;
+      }
       .btn-browse {
         background: none;
         border: 1px solid var(--border-color);
@@ -321,7 +325,9 @@
         font-size: 13px;
         margin-top: 4px;
       }
-      .btn-browse:hover { background: #333; }
+      .btn-browse:hover {
+        background: #333;
+      }
       .drop-preview {
         display: flex;
         flex-direction: column;
@@ -347,7 +353,9 @@
         align-items: center;
         gap: 4px;
       }
-      .btn-add-more:hover { background: #2a2e34; }
+      .btn-add-more:hover {
+        background: #2a2e34;
+      }
       .drop-thumbs {
         display: flex;
         flex-wrap: wrap;
@@ -372,7 +380,7 @@
         position: absolute;
         bottom: 3px;
         left: 4px;
-        background: rgba(0,0,0,0.65);
+        background: rgba(0, 0, 0, 0.65);
         color: #fff;
         font-size: 10px;
         padding: 1px 4px;
@@ -415,11 +423,13 @@
         align-items: center;
         gap: 5px;
       }
-      .mode-btn:hover { background: #2a2e34; }
+      .mode-btn:hover {
+        background: #2a2e34;
+      }
       .mode-btn.active {
         border-color: var(--accent-blue);
         color: var(--accent-blue);
-        background: rgba(77,148,255,0.1);
+        background: rgba(77, 148, 255, 0.1);
       }
       .drop-actions {
         display: flex;
@@ -440,7 +450,9 @@
         font-size: 13px;
         font-family: inherit;
       }
-      .btn-apply-drop:hover { background: #3a7fe0; }
+      .btn-apply-drop:hover {
+        background: #3a7fe0;
+      }
       .btn-clear-drop {
         background: none;
         border: 1px solid var(--border-color);
@@ -450,7 +462,9 @@
         cursor: pointer;
         font-size: 13px;
       }
-      .btn-clear-drop:hover { background: #2a2e34; }
+      .btn-clear-drop:hover {
+        background: #2a2e34;
+      }
       .drop-mode-hint {
         font-size: 11px;
         color: var(--text-dim);
@@ -562,47 +576,120 @@
           <div id="dropZone" class="drop-zone">
             <!-- Trạng thái rỗng: hiện hướng dẫn kéo thả -->
             <div class="drop-area" id="dropArea">
-              <span class="material-symbols-outlined" style="font-size:38px">upload_file</span>
+              <span class="material-symbols-outlined" style="font-size: 38px"
+                >upload_file</span
+              >
               <p>Kéo thả nhiều ảnh vào đây để tạo frames hàng loạt</p>
-              <input type="file" id="dropFileInput" multiple accept="image/*" style="display:none" onchange="handleFileSelect(this)" />
-              <button type="button" class="btn-browse" onclick="document.getElementById('dropFileInput').click()">Chọn ảnh</button>
+              <input
+                type="file"
+                id="dropFileInput"
+                multiple
+                accept="image/*"
+                style="display: none"
+                onchange="handleFileSelect(this)"
+              />
+              <button
+                type="button"
+                class="btn-browse"
+                onclick="document.getElementById('dropFileInput').click()"
+              >
+                Chọn ảnh
+              </button>
             </div>
 
             <!-- Trạng thái có ảnh: hiện preview + cài đặt -->
-            <div class="drop-preview" id="dropPreview" style="display:none">
+            <div class="drop-preview" id="dropPreview" style="display: none">
               <div class="drop-preview-header">
                 <span id="dropCountLabel">0 ảnh</span>
-                <button type="button" class="btn-add-more" onclick="document.getElementById('dropFileInputMore').click()">
-                  <span class="material-symbols-outlined" style="font-size:14px">add</span> Thêm ảnh
+                <button
+                  type="button"
+                  class="btn-add-more"
+                  onclick="document.getElementById('dropFileInputMore').click()"
+                >
+                  <span
+                    class="material-symbols-outlined"
+                    style="font-size: 14px"
+                    >add</span
+                  >
+                  Thêm ảnh
                 </button>
-                <input type="file" id="dropFileInputMore" multiple accept="image/*" style="display:none" onchange="handleFileSelect(this)" />
+                <input
+                  type="file"
+                  id="dropFileInputMore"
+                  multiple
+                  accept="image/*"
+                  style="display: none"
+                  onchange="handleFileSelect(this)"
+                />
               </div>
 
               <div class="drop-thumbs" id="dropThumbs"></div>
 
               <!-- Chọn chế độ gán -->
               <div class="drop-modes">
-                <button type="button" class="mode-btn active" data-mode="alternate" onclick="setDropMode('alternate')">
-                  <span class="material-symbols-outlined" style="font-size:15px">swap_horiz</span>
+                <button
+                  type="button"
+                  class="mode-btn active"
+                  data-mode="alternate"
+                  onclick="setDropMode('alternate')"
+                >
+                  <span
+                    class="material-symbols-outlined"
+                    style="font-size: 15px"
+                    >swap_horiz</span
+                  >
                   Xen kẽ Start → End
                 </button>
-                <button type="button" class="mode-btn" data-mode="start" onclick="setDropMode('start')">
-                  <span class="material-symbols-outlined" style="font-size:15px">first_page</span>
+                <button
+                  type="button"
+                  class="mode-btn"
+                  data-mode="start"
+                  onclick="setDropMode('start')"
+                >
+                  <span
+                    class="material-symbols-outlined"
+                    style="font-size: 15px"
+                    >first_page</span
+                  >
                   Chỉ Start
                 </button>
-                <button type="button" class="mode-btn" data-mode="end" onclick="setDropMode('end')">
-                  <span class="material-symbols-outlined" style="font-size:15px">last_page</span>
+                <button
+                  type="button"
+                  class="mode-btn"
+                  data-mode="end"
+                  onclick="setDropMode('end')"
+                >
+                  <span
+                    class="material-symbols-outlined"
+                    style="font-size: 15px"
+                    >last_page</span
+                  >
                   Chỉ End
                 </button>
                 <span class="drop-mode-hint" id="dropModeHint"></span>
               </div>
 
               <div class="drop-actions">
-                <button type="button" class="btn-apply-drop" id="btnApplyDrop" onclick="applyDropped()">
-                  <span class="material-symbols-outlined" style="font-size:16px">auto_fix_high</span>
+                <button
+                  type="button"
+                  class="btn-apply-drop"
+                  id="btnApplyDrop"
+                  onclick="applyDropped()"
+                >
+                  <span
+                    class="material-symbols-outlined"
+                    style="font-size: 16px"
+                    >auto_fix_high</span
+                  >
                   Tạo frames
                 </button>
-                <button type="button" class="btn-clear-drop" onclick="clearDropped()">Xóa ảnh đã thả</button>
+                <button
+                  type="button"
+                  class="btn-clear-drop"
+                  onclick="clearDropped()"
+                >
+                  Xóa ảnh đã thả
+                </button>
               </div>
             </div>
           </div>
@@ -682,11 +769,11 @@
               <label class="setting-label">Model:</label>
               <div class="select-wrapper">
                 <select name="modelType" class="custom-select">
-                  <option value="Veo 3.1 - Lite">Veo 3.1 - Lite</option>
+                  <option value="Veo 3.1 - Lite" selected>
+                    Veo 3.1 - Lite
+                  </option>
                   <option value="Veo 3.1 - Fast">Veo 3.1 - Fast</option>
                   <option value="Veo 3.1 - Quality">Veo 3.1 - Quality</option>
-                  <option value="Veo 3.1 - Lite [Lower Priority]" selected>Veo 3.1 - Lite [Lower Priority]</option>
-                  <option value="Veo 3.1 - Fast [Lower Priority]">Veo 3.1 - Fast [Lower Priority]</option>
                 </select>
               </div>
             </div>
@@ -892,9 +979,7 @@
           ].filter((f) => {
             const s = f.querySelector('input[name^="start_images"]');
             const e = f.querySelector('input[name^="end_images"]');
-            return (
-              (!s || s.files.length === 0) && (!e || e.files.length === 0)
-            );
+            return (!s || s.files.length === 0) && (!e || e.files.length === 0);
           });
 
           let emptyIdx = 0;
