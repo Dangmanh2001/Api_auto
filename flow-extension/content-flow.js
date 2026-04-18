@@ -488,6 +488,21 @@ async function runImageToVideo(params, log, serverUrl) {
     );
     btn.click();
     log(`Đã click ${buttonText}`);
+    // ✅ THÊM ĐOẠN NÀY (click + nhập input)
+    const inputSelector = 'input[placeholder*="Tìm kiếm"]';
+
+    await waitForCondition(() => document.querySelector(inputSelector), 10000);
+
+    const input = document.querySelector(inputSelector);
+
+    input.click();
+    input.value = fileName;
+
+    // trigger để React/Vue nhận
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+
+    log(`Đã nhập tên ảnh vào ô tìm kiếm`);
     await waitForCondition(
       () => !!document.querySelector(`img[alt="${fileName}"]`),
       30000,
