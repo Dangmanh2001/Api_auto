@@ -331,6 +331,17 @@
       const promptFileInp = document.getElementById("promptFileInp");
       const promptsTextarea = document.getElementById("prompts");
 
+      // Validate form trước khi gửi (Check task trước khi check agent)
+      document
+        .getElementById("uploadForm")
+        .addEventListener("submit", function (e) {
+          const prompts = promptsTextarea.value.trim();
+          if (!prompts) {
+            e.preventDefault();
+            alert("Không có task hợp lệ! Vui lòng nhập ít nhất một prompt.");
+          }
+        });
+
       promptDropZone.addEventListener("click", () => promptFileInp.click());
 
       promptDropZone.addEventListener("dragover", (e) => {

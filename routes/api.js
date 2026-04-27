@@ -23,27 +23,35 @@ const logSseClients = new Set(); // Clients watching the logs UI
 /* Middleware xác thực Agent ID: Chỉ cho phép tạo task nếu Agent ID đang online */
 const validateAgent = (req, res, next) => {
   // Lấy agentId từ body, query hoặc headers
-  let agentId = req.body.agentId || req.query.agentId || req.headers["x-agent-id"];
+  let agentId =
+    req.body.agentId || req.query.agentId || req.headers["x-agent-id"];
 
-  // Fallback: Nếu không có ID trong request nhưng server đang có duy nhất 1 agent kết nối, 
+  // Fallback: Nếu không có ID trong request nhưng server đang có duy nhất 1 agent kết nối,
   // tự động gán task cho agent đó để tránh lỗi khi extension load chậm hoặc chưa inject kịp vào form.
   if ((!agentId || agentId === "unknown") && agentTaskSseClients.size === 1) {
     agentId = Array.from(agentTaskSseClients.keys())[0];
-    console.log(`🤖 Hệ thống tự động nhận diện Agent đang hoạt động: ${agentId}`);
+    console.log(
+      `🤖 Hệ thống tự động nhận diện Agent đang hoạt động: ${agentId}`,
+    );
   }
 
   let errorMsg = null;
 
   if (!agentId || agentId === "unknown") {
-    errorMsg = "Thiếu định danh Agent. Vui lòng đảm bảo Extension đã sẵn sàng (hiện Badge xanh có mã ID).";
+    errorMsg =
+      "Thiếu định danh Agent. Vui lòng đảm bảo Extension đã sẵn sàng (hiện Badge xanh có mã ID).";
   } else if (!agentTaskSseClients.has(agentId)) {
     // Vẫn cho phép tạo task nếu có ID, task sẽ nằm trong queue chờ agent kết nối lại SSE
-    console.warn(`⚠️ Agent "${agentId}" hiện không có kết nối stream, task sẽ được lưu tạm.`);
+    console.warn(
+      `⚠️ Agent "${agentId}" hiện không có kết nối stream, task sẽ được lưu tạm.`,
+    );
   }
 
   if (errorMsg) {
-    if (req.accepts('html')) {
-      return res.send(`<script>alert("${errorMsg}"); window.history.back();</script>`);
+    if (req.accepts("html")) {
+      return res.send(
+        `<script>alert("${errorMsg}"); window.history.back();</script>`,
+      );
     }
     return res.status(400).json({ error: errorMsg });
   }
@@ -194,8 +202,8 @@ router.get("/", TextToVideoControllers.TextToVideoveo3Api);
 // Thêm middleware upload.array() để xử lý nhiều file với field name là "images"
 router.post(
   "/",
-  validateAgent,
   upload.array("images"),
+  validateAgent,
   TextToVideoControllers.TextToVideoveo3ApiPost,
 );
 /* Tạo video bằng Ảnh */
@@ -203,16 +211,16 @@ router.get("/imageToVideo", ImageToVideoController.ImageToVideo);
 
 router.post(
   "/imageToVideo",
-  validateAgent,
   upload.any(),
+  validateAgent,
   ImageToVideoController.ImageToVideoPost,
 );
 /* Tạo video thành phần */
 router.get("/IngredientsToVideo", IngredientsToVideo.IngredientsToVideo);
 router.post(
   "/IngredientsToVideo",
-  validateAgent,
   upload.any(),
+  validateAgent,
   IngredientsToVideo.IngredientsToVideoPost,
 );
 /* Gọi api gemini để phân tích video */
@@ -221,7 +229,7 @@ router.post("/gemini", TextToVideoControllers.postGemini);
 
 /* Text To Image */
 router.get("/textToImage", TextToImage.getPage);
-router.post("/textToImage", validateAgent, TextToImage.post);
+router.post("/textToImage", upload.none(), validateAgent, TextToImage.post);
 
 /* Clone YouTube Channel */
 router.get("/clone-channel", CloneChannel.getPage);

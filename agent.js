@@ -19,7 +19,10 @@ const http = require("http");
 const { connect } = require("puppeteer-real-browser");
 
 // ==================== CONFIG ====================
-const SERVER_URL = (process.argv[2] || "http://localhost:3000").replace(/\/$/, "");
+const SERVER_URL = (process.argv[2] || "http://localhost:3000").replace(
+  /\/$/,
+  "",
+);
 const CHROME_PROFILE = process.argv[3] || path.join(__dirname, "flow-profile");
 const AGENT_NAME = os.hostname();
 const POLL_INTERVAL = 3000;
@@ -32,7 +35,10 @@ function findChrome() {
   const paths = [
     "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
     "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
-    path.join(process.env.LOCALAPPDATA || "", "Google\\Chrome\\Application\\chrome.exe"),
+    path.join(
+      process.env.LOCALAPPDATA || "",
+      "Google\\Chrome\\Application\\chrome.exe",
+    ),
   ];
   for (const p of paths) {
     if (fs.existsSync(p)) return p;
@@ -69,7 +75,9 @@ async function createBrowser() {
 
   // Giả lập tab luôn visible/focused dù người dùng chuyển sang tab khác
   await page.evaluateOnNewDocument(() => {
-    Object.defineProperty(document, "visibilityState", { get: () => "visible" });
+    Object.defineProperty(document, "visibilityState", {
+      get: () => "visible",
+    });
     Object.defineProperty(document, "hidden", { get: () => false });
     // Chặn website lắng nghe visibilitychange để không bị pause
     const _addEvt = EventTarget.prototype.addEventListener;
@@ -99,7 +107,9 @@ async function humanType(page, selector, text) {
 }
 
 async function humanMouseWander(page) {
-  await page.mouse.move(rnd(200, 1200), rnd(100, 700), { steps: Math.floor(rnd(10, 25)) });
+  await page.mouse.move(rnd(200, 1200), rnd(100, 700), {
+    steps: Math.floor(rnd(10, 25)),
+  });
   await sleep(rnd(200, 600));
 }
 
@@ -107,9 +117,19 @@ async function clickAndVerify(page, xpath, description) {
   await page.locator(xpath).click();
   await sleep(500);
   const ok = await page.evaluate((sel) => {
-    const el = document.evaluate(sel.replace("xpath/", ""), document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+    const el = document.evaluate(
+      sel.replace("xpath/", ""),
+      document,
+      null,
+      XPathResult.FIRST_ORDERED_NODE_TYPE,
+      null,
+    ).singleNodeValue;
     if (!el) return false;
-    return el.getAttribute("data-state") === "active" || el.getAttribute("aria-selected") === "true" || el.classList.contains("active");
+    return (
+      el.getAttribute("data-state") === "active" ||
+      el.getAttribute("aria-selected") === "true" ||
+      el.classList.contains("active")
+    );
   }, xpath);
   console.log(`[${description}] ${ok ? "✅" : "❌"}`);
 }
@@ -118,7 +138,9 @@ function minimizeChrome() {
   const { exec } = require("child_process");
   exec(
     `powershell -command "Add-Type @'\nusing System;\nusing System.Runtime.InteropServices;\npublic class Win32 {\n  [DllImport(\\"user32.dll\\")] public static extern bool ShowWindow(IntPtr h, int n);\n  [DllImport(\\"user32.dll\\")] public static extern IntPtr GetForegroundWindow();\n}\n'@; [Win32]::ShowWindow([Win32]::GetForegroundWindow(), 2)"`,
-    (err) => { if (!err) console.log("🪟 Chrome minimize!"); }
+    (err) => {
+      if (!err) console.log("🪟 Chrome minimize!");
+    },
   );
 }
 
@@ -126,43 +148,85 @@ async function blockEditNavigation(page) {
   await page.evaluate(() => {
     if (window.__editBlocked) return;
     window.__editBlocked = true;
-    document.addEventListener("click", (e) => {
-      const a = e.target.closest('a[href*="/edit/"]');
-      if (a) { e.preventDefault(); e.stopImmediatePropagation(); }
-    }, true);
+    document.addEventListener(
+      "click",
+      (e) => {
+        const a = e.target.closest('a[href*="/edit/"]');
+        if (a) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+        }
+      },
+      true,
+    );
   });
 }
 
 async function setupPage(page, aspectRatio, modelType, mode = "Khung hình") {
-  await page.goto("https://labs.google/fx/vi/tools/flow", { waitUntil: "networkidle2", timeout: 60000 });
+  await page.goto("https://labs.google/fx/vi/tools/flow", {
+    waitUntil: "networkidle2",
+    timeout: 60000,
+  });
   if (page.url().includes("accounts.google.com")) {
     console.log("⚠️ Chưa login — vui lòng đăng nhập thủ công trong Chrome...");
-    await page.waitForFunction(() => !window.location.href.includes("accounts.google.com"), { timeout: 5 * 60 * 1000 });
+    await page.waitForFunction(
+      () => !window.location.href.includes("accounts.google.com"),
+      { timeout: 5 * 60 * 1000 },
+    );
     console.log("✅ Đã login!");
   }
   await page.waitForFunction(
-    () => [...document.querySelectorAll("button")].some((btn) => btn.textContent?.includes("Dự án mới")),
-    { timeout: 60000 }
+    () =>
+      [...document.querySelectorAll("button")].some((btn) =>
+        btn.textContent?.includes("Dự án mới"),
+      ),
+    { timeout: 60000 },
   );
   await page.evaluate(() => {
-    const btn = [...document.querySelectorAll("button")].find((b) => b.textContent?.includes("Dự án mới"));
-    if (btn) { btn.scrollIntoView({ block: "center" }); btn.click(); }
+    const btn = [...document.querySelectorAll("button")].find((b) =>
+      b.textContent?.includes("Dự án mới"),
+    );
+    if (btn) {
+      btn.scrollIntoView({ block: "center" });
+      btn.click();
+    }
   });
   console.log("Đã click Dự án mới");
   try {
-    await page.locator('xpath///button[.//span[text()="Tạo"]]/preceding-sibling::button').click().catch(() => {});
+    await page
+      .locator(
+        'xpath///button[.//span[text()="Tạo"]]/preceding-sibling::button',
+      )
+      .click()
+      .catch(() => {});
     await sleep(600);
     await page.click('button.flow_tab_slider_trigger[aria-controls*="VIDEO"]');
-    await clickAndVerify(page, `xpath///button[contains(., '${mode}')]`, `Chọn ${mode}`);
-    await clickAndVerify(page, `xpath///button[contains(., '${aspectRatio}')]`, "Chọn Khung hình");
-    const dropdownBtn = "xpath///button[@aria-haspopup='menu' and contains(., 'Veo 3.1')]";
+    await sleep(rnd(1000, 2000));
+    await clickAndVerify(
+      page,
+      `xpath///button[contains(., '${mode}')]`,
+      `Chọn ${mode}`,
+    );
+    await sleep(rnd(1000, 1500));
+    await clickAndVerify(
+      page,
+      `xpath///button[contains(., '${aspectRatio}')]`,
+      "Chọn Khung hình",
+    );
+    await sleep(rnd(800, 1500));
+    const dropdownBtn =
+      "xpath///button[@aria-haspopup='menu' and contains(., 'Veo 3.1')]";
     await page.waitForSelector(dropdownBtn, { visible: true });
     await page.click(dropdownBtn);
-    await page.waitForSelector("div[role='menu'][data-state='open']", { visible: true });
+    await page.waitForSelector("div[role='menu'][data-state='open']", {
+      visible: true,
+    });
+    await sleep(rnd(500, 1000));
     const optionXpath = `xpath///div[@role='menuitem']//span[contains(text(), '${modelType}')]`;
     await page.waitForSelector(optionXpath, { visible: true });
     await page.click(optionXpath);
     console.log("✅ Đã chọn Model");
+    await sleep(rnd(1000, 1500));
     await page.click("button.flow_tab_slider_trigger::-p-text(x1)");
   } catch {
     console.log("Có lỗi setup, tiếp tục...");
@@ -170,12 +234,17 @@ async function setupPage(page, aspectRatio, modelType, mode = "Khung hình") {
 }
 
 async function waitForVideos(page, expectedCount) {
-  const getTileCount = () => page.evaluate(() => {
-    const items = document.querySelectorAll("[data-item-index]");
-    if (!items.length) return 0;
-    const maxIndex = Math.max(...[...items].map((el) => parseInt(el.getAttribute("data-item-index") || "0")));
-    return (maxIndex + 1) * 2;
-  });
+  const getTileCount = () =>
+    page.evaluate(() => {
+      const items = document.querySelectorAll("[data-item-index]");
+      if (!items.length) return 0;
+      const maxIndex = Math.max(
+        ...[...items].map((el) =>
+          parseInt(el.getAttribute("data-item-index") || "0"),
+        ),
+      );
+      return (maxIndex + 1) * 2;
+    });
 
   const tilesBefore = await getTileCount();
   const expectedTiles = tilesBefore + expectedCount;
@@ -212,16 +281,25 @@ async function waitForVideos(page, expectedCount) {
     if (retryList.length > 0) {
       stableCount = 0;
       const pick = retryList[Math.floor(Math.random() * retryList.length)];
-      await pick.evaluate((el) => el.scrollIntoView({ block: "center", behavior: "smooth" }));
+      await pick.evaluate((el) =>
+        el.scrollIntoView({ block: "center", behavior: "smooth" }),
+      );
       await sleep(rnd(600, 1000));
-      await pick.evaluate((btn) => btn.dispatchEvent(new MouseEvent("click", { bubbles: false, cancelable: true })));
+      await pick.evaluate((btn) =>
+        btn.dispatchEvent(
+          new MouseEvent("click", { bubbles: false, cancelable: true }),
+        ),
+      );
       console.log(`⚠️ Bấm Thử lại (${retryList.length} nút)`);
       await sleep(rnd(500, 1000));
       continue;
     }
 
-    const isLoading = await page.evaluate(() =>
-      document.querySelector('[class*="generating"], [class*="spinner"], [aria-busy="true"]') !== null
+    const isLoading = await page.evaluate(
+      () =>
+        document.querySelector(
+          '[class*="generating"], [class*="spinner"], [aria-busy="true"]',
+        ) !== null,
     );
 
     if (isLoading) {
@@ -266,17 +344,24 @@ async function runTextToVideo(params, log) {
       log(`📦 Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${batch.length} prompt`);
 
       for (const prompt of batch) {
-        await page.waitForSelector('[role="textbox"]', { visible: true, timeout: 60000 });
+        await page.waitForSelector('[role="textbox"]', {
+          visible: true,
+          timeout: 60000,
+        });
         await humanMouseWander(page);
         await sleep(rnd(300, 700));
         await humanType(page, '[role="textbox"]', prompt);
         await sleep(rnd(500, 1200));
         const createBtn = await page.$("button ::-p-text(Tạo)");
         if (createBtn) {
-          await createBtn.evaluate((btn) => btn.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true })));
+          await createBtn.evaluate((btn) =>
+            btn.dispatchEvent(
+              new MouseEvent("click", { bubbles: true, cancelable: true }),
+            ),
+          );
         }
         log(`✅ Submit: ${prompt.substring(0, 40)}...`);
-        await sleep(rnd(1200, 2500));
+        await sleep(rnd(3000, 5000));
       }
 
       log(`⏳ Đợi ${batch.length} video render...`);
@@ -307,30 +392,47 @@ async function runImageToVideo(params, log) {
 
       const startPath = await downloadFile(task.startImageName, tmpDir);
       const imagePaths = [startPath];
-      if (task.endImageName) imagePaths.push(await downloadFile(task.endImageName, tmpDir));
+      if (task.endImageName)
+        imagePaths.push(await downloadFile(task.endImageName, tmpDir));
 
       await page.waitForSelector('input[type="file"]', { timeout: 30000 });
       const fileInput = await page.$('input[type="file"]');
       if (fileInput) {
-        const oldCount = await page.evaluate(() => document.querySelectorAll('img[src*="getMediaUrlRedirect"]').length);
+        const oldCount = await page.evaluate(
+          () =>
+            document.querySelectorAll('img[src*="getMediaUrlRedirect"]').length,
+        );
         await fileInput.uploadFile(...imagePaths);
         await page.waitForFunction(
-          (old, count) => document.querySelectorAll('img[src*="getMediaUrlRedirect"]').length >= old + count,
-          { timeout: 120000 }, oldCount, imagePaths.length
+          (old, count) =>
+            document.querySelectorAll('img[src*="getMediaUrlRedirect"]')
+              .length >=
+            old + count,
+          { timeout: 120000 },
+          oldCount,
+          imagePaths.length,
         );
         log("✅ Upload ảnh xong");
       }
 
       async function selectImage(buttonText, fileName) {
         await page.waitForFunction(
-          (text) => [...document.querySelectorAll("div")].some((el) => el.textContent?.trim() === text),
-          {}, buttonText
+          (text) =>
+            [...document.querySelectorAll("div")].some(
+              (el) => el.textContent?.trim() === text,
+            ),
+          {},
+          buttonText,
         );
         await page.evaluate((text) => {
-          const btn = [...document.querySelectorAll("div")].find((el) => el.textContent?.trim() === text);
+          const btn = [...document.querySelectorAll("div")].find(
+            (el) => el.textContent?.trim() === text,
+          );
           if (btn) btn.click();
         }, buttonText);
-        await page.waitForSelector(`img[alt="${fileName}"]`, { timeout: 10000 });
+        await page.waitForSelector(`img[alt="${fileName}"]`, {
+          timeout: 10000,
+        });
         await page.click(`img[alt="${fileName}"]`);
         log(`Đã chọn: ${fileName}`);
       }
@@ -338,13 +440,20 @@ async function runImageToVideo(params, log) {
       await selectImage("Bắt đầu", task.startImageName);
       if (task.endImageName) await selectImage("Kết thúc", task.endImageName);
 
-      await page.waitForSelector('[role="textbox"]', { visible: true, timeout: 60000 });
+      await page.waitForSelector('[role="textbox"]', {
+        visible: true,
+        timeout: 60000,
+      });
       await humanType(page, '[role="textbox"]', task.prompt);
       await sleep(rnd(500, 1200));
 
       const createBtn = await page.$("button ::-p-text(Tạo)");
       if (createBtn) {
-        await createBtn.evaluate((btn) => btn.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true })));
+        await createBtn.evaluate((btn) =>
+          btn.dispatchEvent(
+            new MouseEvent("click", { bubbles: true, cancelable: true }),
+          ),
+        );
       }
       log("✅ Click Tạo");
       await waitForVideos(page, 1);
@@ -379,36 +488,59 @@ async function runIngredientsToVideo(params, log) {
       await page.waitForSelector('input[type="file"]', { timeout: 30000 });
       const fileInput = await page.$('input[type="file"]');
       if (fileInput) {
-        const oldCount = await page.evaluate(() => document.querySelectorAll('img[src*="getMediaUrlRedirect"]').length);
+        const oldCount = await page.evaluate(
+          () =>
+            document.querySelectorAll('img[src*="getMediaUrlRedirect"]').length,
+        );
         await fileInput.uploadFile(...localPaths);
         await page.waitForFunction(
-          (old, count) => document.querySelectorAll('img[src*="getMediaUrlRedirect"]').length >= old + count,
-          { timeout: 120000 }, oldCount, localPaths.length
+          (old, count) =>
+            document.querySelectorAll('img[src*="getMediaUrlRedirect"]')
+              .length >=
+            old + count,
+          { timeout: 120000 },
+          oldCount,
+          localPaths.length,
         );
         log("✅ Upload ảnh xong");
       }
 
       for (const name of item.imageNames) {
-        const btn = await page.waitForSelector(`xpath///button[.//span[text()='Tạo']]`);
+        const btn = await page.waitForSelector(
+          `xpath///button[.//span[text()='Tạo']]`,
+        );
         await btn.click();
         await page.waitForFunction(
-          (n) => [...document.querySelectorAll("img")].some((img) => img.alt === n),
-          { timeout: 10000 }, name
+          (n) =>
+            [...document.querySelectorAll("img")].some((img) => img.alt === n),
+          { timeout: 10000 },
+          name,
         );
         await page.evaluate((n) => {
-          const img = [...document.querySelectorAll("img")].find((i) => i.alt === n);
+          const img = [...document.querySelectorAll("img")].find(
+            (i) => i.alt === n,
+          );
           if (img) img.click();
         }, name);
         log(`Đã chọn: ${name}`);
         await sleep(rnd(800, 1200));
       }
 
-      await page.waitForSelector('[role="textbox"]', { visible: true, timeout: 60000 });
+      await page.waitForSelector('[role="textbox"]', {
+        visible: true,
+        timeout: 60000,
+      });
       await humanType(page, '[role="textbox"]', item.prompt);
       await sleep(rnd(500, 1200));
 
-      const createBtn = await page.waitForSelector(`xpath///button[.//span[text()='Tạo'] and .//i[text()='arrow_forward']]`);
-      await createBtn.evaluate((btn) => btn.dispatchEvent(new MouseEvent("click", { bubbles: false, cancelable: true })));
+      const createBtn = await page.waitForSelector(
+        `xpath///button[.//span[text()='Tạo'] and .//i[text()='arrow_forward']]`,
+      );
+      await createBtn.evaluate((btn) =>
+        btn.dispatchEvent(
+          new MouseEvent("click", { bubbles: false, cancelable: true }),
+        ),
+      );
       log("✅ Click Tạo");
       await waitForVideos(page, 1);
     }
@@ -422,14 +554,16 @@ async function poll() {
   try {
     const { data } = await axios.get(
       `${SERVER_URL}/api/agent/poll?agent=${encodeURIComponent(AGENT_NAME)}`,
-      { timeout: 5000 }
+      { timeout: 5000 },
     );
     if (!data.task) return;
 
     const { id, type, params } = data.task;
     const log = (msg) => {
       console.log(msg);
-      axios.post(`${SERVER_URL}/api/agent/log/${id}`, { msg }, { timeout: 3000 }).catch(() => {});
+      axios
+        .post(`${SERVER_URL}/api/agent/log/${id}`, { msg }, { timeout: 3000 })
+        .catch(() => {});
     };
 
     log(`🤖 [${AGENT_NAME}] Nhận task #${id}: ${type}`);
@@ -437,13 +571,24 @@ async function poll() {
     try {
       if (type === "text-to-video") await runTextToVideo(params, log);
       else if (type === "image-to-video") await runImageToVideo(params, log);
-      else if (type === "ingredients-to-video") await runIngredientsToVideo(params, log);
+      else if (type === "ingredients-to-video")
+        await runIngredientsToVideo(params, log);
       else log(`❓ Không biết task type: ${type}`);
 
-      await axios.post(`${SERVER_URL}/api/agent/finish/${id}`, { status: "done" }, { timeout: 3000 });
+      await axios.post(
+        `${SERVER_URL}/api/agent/finish/${id}`,
+        { status: "done" },
+        { timeout: 3000 },
+      );
       log(`✅ Task #${id} hoàn thành!`);
     } catch (err) {
-      await axios.post(`${SERVER_URL}/api/agent/finish/${id}`, { status: "failed", error: err.message }, { timeout: 3000 }).catch(() => {});
+      await axios
+        .post(
+          `${SERVER_URL}/api/agent/finish/${id}`,
+          { status: "failed", error: err.message },
+          { timeout: 3000 },
+        )
+        .catch(() => {});
       console.error(`❌ Task #${id} thất bại:`, err.message);
     }
   } catch (err) {

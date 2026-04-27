@@ -10,9 +10,9 @@
     />
     <style>
       :root {
-        --bg-dark: #131517;
-        --card-bg: #1e2124;
-        --border-color: #33373b;
+        --bg-dark: #1a1c1e;
+        --card-bg: #212429;
+        --border-color: #3f444c;
         --text-main: #e2e2e2;
         --text-dim: #9aa0a6;
         --accent-blue: #4d94ff;
@@ -21,7 +21,7 @@
       body {
         background-color: var(--bg-dark);
         color: var(--text-main);
-        font-family: "Segoe UI", sans-serif;
+        font-family: "Segoe UI", Roboto, sans-serif;
         padding: 40px;
         margin: 0;
         display: flex;
@@ -36,9 +36,28 @@
       }
 
       .container-fluid {
-        max-width: 600px;
+        max-width: 850px;
         width: 100%;
         box-sizing: border-box;
+      }
+
+      .list-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        padding: 0 10px;
+        width: 100%;
+      }
+      .btn-clear {
+        background: none;
+        border: none;
+        color: #ff6b6b;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 13px;
       }
 
       /* Khối Ingredient chính */
@@ -155,17 +174,18 @@
         color: #fff;
       }
 
-      .footer-action {
-        margin-top: 20px;
+      .footer {
+        margin-top: 40px;
+        display: flex;
+        justify-content: flex-end;
       }
-
-      .btn-start {
-        background: #fff;
-        color: #000;
+      .btn-submit {
+        background: var(--accent-blue);
+        color: white;
         border: none;
-        padding: 10px 24px;
-        border-radius: 8px;
-        font-weight: 600;
+        width: 45px;
+        height: 45px;
+        border-radius: 50%;
         cursor: pointer;
       }
       nav {
@@ -490,6 +510,12 @@
           padding: 14px;
         }
 
+        .list-header {
+          flex-wrap: wrap;
+          gap: 10px;
+          padding: 0;
+        }
+
         .prompt-box {
           font-size: 14px;
         }
@@ -517,6 +543,22 @@
         method="POST"
         enctype="multipart/form-data"
       >
+        <div class="list-header">
+          <span style="font-size: 14px; color: var(--text-dim)"
+            >Cấu hình luồng Ingredients</span
+          >
+          <button
+            type="button"
+            class="btn-clear"
+            onclick="clearAllIngredients()"
+          >
+            <span class="material-symbols-outlined" style="font-size: 18px"
+              >delete_sweep</span
+            >
+            Xóa tất cả
+          </button>
+        </div>
+
         <!-- ===== DROP ZONE ===== -->
         <div id="dropZone" class="drop-zone">
           <div class="drop-area" id="dropArea">
@@ -694,8 +736,10 @@
           <span>Thêm Ingredient</span>
         </div>
 
-        <div class="footer-action">
-          <button type="submit" class="btn-start">Bắt đầu</button>
+        <div class="footer">
+          <button type="submit" class="btn-submit">
+            <span class="material-symbols-outlined">arrow_forward</span>
+          </button>
         </div>
         <div class="settings-row">
           <div class="setting-group">
@@ -724,6 +768,29 @@
 
     <script>
       let count = 1;
+
+      // Validate form trước khi gửi
+      document
+        .getElementById("renderForm")
+        .addEventListener("submit", function (e) {
+          const cards = document.querySelectorAll(".ingredient-card");
+          let hasData = false;
+
+          cards.forEach((card) => {
+            const prompt = card.querySelector("textarea").value.trim();
+            const files = [...card.querySelectorAll('input[type="file"]')].some(
+              (inp) => inp.files.length > 0,
+            );
+            if (prompt || files) hasData = true;
+          });
+
+          if (!hasData) {
+            e.preventDefault();
+            alert(
+              "Không có task hợp lệ! Vui lòng nhập prompt hoặc tải ảnh lên.",
+            );
+          }
+        });
 
       function addIngredient() {
         count++;
@@ -762,6 +829,47 @@
           alert("Phải có ít nhất một Ingredient!");
         }
       }
+
+      function clearAllIngredients() {
+        // Xóa tất cả các card phụ (extra cards)
+        const list = document.getElementById("ingredientList");
+        const cards = list.querySelectorAll(".ingredient-card");
+        for (let i = 1; i < cards.length; i++) {
+          cards[i].remove();
+        }
+
+        // Reset card đầu tiên về trạng thái mặc định
+        const firstCard = cards[0];
+        if (firstCard) {
+          // Xóa các ảnh preview
+          firstCard
+            .querySelectorAll(".preview-img")
+            .forEach((img) => img.remove());
+
+          // Hiện lại các icon upload ban đầu
+          firstCard
+            .querySelectorAll(".upload-box span")
+            .forEach((s) => (s.style.visibility = "visible"));
+
+          // Reset các input file và style của chúng
+          firstCard.querySelectorAll('input[type="file"]').forEach((input) => {
+            input.value = "";
+            input.style.position = "";
+            input.style.opacity = "";
+            input.style.zIndex = "";
+          });
+
+          // Xóa prompt
+          const prompt = firstCard.querySelector("textarea");
+          if (prompt) prompt.value = "";
+        }
+
+        // Reset biến đếm và dọn sạch drop zone
+        count = 1;
+        if (typeof clearDropped === "function") clearDropped();
+        reindexIngredients();
+      }
+
       function reindexIngredients() {
         const cards = document.querySelectorAll(".ingredient-card");
         cards.forEach((card, index) => {

@@ -791,6 +791,36 @@
           app.classList.toggle("hide-end");
         }
 
+        // Validate form trước khi gửi (Check task trước khi check agent)
+        document
+          .getElementById("renderForm")
+          .addEventListener("submit", function (e) {
+            const groups = document.querySelectorAll(".frame-group");
+            let hasData = false;
+
+            groups.forEach((group) => {
+              const prompt = group.querySelector("textarea").value.trim();
+              const startInput = group.querySelector(
+                'input[name^="start_images"]',
+              );
+              const endInput = group.querySelector('input[name^="end_images"]');
+              if (
+                prompt ||
+                (startInput && startInput.files.length > 0) ||
+                (endInput && endInput.files.length > 0)
+              ) {
+                hasData = true;
+              }
+            });
+
+            if (!hasData) {
+              e.preventDefault();
+              alert(
+                "Không có task hợp lệ! Vui lòng nhập prompt hoặc chọn ảnh.",
+              );
+            }
+          });
+
         function reindexFrames() {
           document
             .querySelectorAll("#flowList .frame-group")
@@ -832,9 +862,39 @@
         }
 
         function clearAll() {
+          // Xóa tất cả các frame phụ (những cái được thêm qua nút +)
           document
             .querySelectorAll(".extra-frame")
             .forEach((el) => el.remove());
+
+          // Reset nội dung của frame gốc đầu tiên về trạng thái ban đầu
+          const firstFrame = document.querySelector("#flowList .frame-group");
+          if (firstFrame) {
+            const startImg = firstFrame.querySelector(
+              ".image-box:not(.end-frame-box) .thumbnail",
+            );
+            const endImg = firstFrame.querySelector(
+              ".end-frame-box .thumbnail",
+            );
+            const startInput = firstFrame.querySelector(
+              'input[name^="start_images"]',
+            );
+            const endInput = firstFrame.querySelector(
+              'input[name^="end_images"]',
+            );
+            const prompt = firstFrame.querySelector("textarea");
+
+            if (startImg)
+              startImg.src =
+                "https://cdn-media.sforum.vn/storage/app/media/ctvseo_maihue/hinh-nen-1920-1080/hinh-nen-1920-1080-thumbnail.jpg";
+            if (endImg)
+              endImg.src =
+                "https://cdn-media.sforum.vn/storage/app/media/thunguyen/hinh-nen-vui-ve-2.jpg";
+            if (startInput) startInput.value = "";
+            if (endInput) endInput.value = "";
+            if (prompt) prompt.value = "";
+          }
+
           reindexFrames();
         }
         function triggerUpload(img) {
@@ -961,40 +1021,102 @@
         function applyDropped() {
           if (droppedFiles.length === 0) return;
 
-          // Build danh sách cặp (startFile, endFile) theo mode
-          const pairs = [];
-          if (dropMode === "start") {
-            droppedFiles.forEach((f) => pairs.push([f, null]));
-          } else if (dropMode === "end") {
-            droppedFiles.forEach((f) => pairs.push([null, f]));
-          } else {
+          // Tự động hiện End Frame nếu người dùng kéo ảnh vào ở chế độ End hoặc Xen kẽ
+          if (dropMode === "alternate" || dropMode === "end") {
+            document.getElementById("mainApp").classList.remove("hide-end");
+          }
+
+          if (dropMode === "alternate") {
+            const pairs = [];
             for (let i = 0; i < droppedFiles.length; i += 2) {
               pairs.push([droppedFiles[i], droppedFiles[i + 1] || null]);
             }
-          }
 
-          // Lấy danh sách frame rỗng hiện có (chưa có file nào được chọn)
-          const emptyFrames = [
-            ...document.querySelectorAll("#flowList .frame-group"),
-          ].filter((f) => {
-            const s = f.querySelector('input[name^="start_images"]');
-            const e = f.querySelector('input[name^="end_images"]');
-            return (!s || s.files.length === 0) && (!e || e.files.length === 0);
-          });
+            const emptyFrames = [
+              ...document.querySelectorAll("#flowList .frame-group"),
+            ].filter((f) => {
+              const s = f.querySelector('input[name^="start_images"]');
+              const e = f.querySelector('input[name^="end_images"]');
+              return (
+                (!s || s.files.length === 0) && (!e || e.files.length === 0)
+              );
+            });
 
-          let emptyIdx = 0;
-          for (const [startFile, endFile] of pairs) {
-            let frame;
-            if (emptyIdx < emptyFrames.length) {
-              // Tái dụng frame rỗng sẵn có (bắt đầu từ frame đầu tiên)
-              frame = emptyFrames[emptyIdx++];
-            } else {
-              // Hết frame rỗng → tạo thêm
-              addFullFrame();
-              const all = document.querySelectorAll("#flowList .frame-group");
-              frame = all[all.length - 1];
-            }
-            fillFrame(frame, startFile, endFile);
+            pairs.forEach((pair, idx) => {
+              let frame;
+              if (idx < emptyFrames.length) {
+                frame = emptyFrames[idx];
+              } else {
+                addFullFrame();
+                const all = document.querySelectorAll("#flowList .frame-group");
+                frame = all[all.length - 1];
+              }
+              fillFrame(frame, pair[0], pair[1]);
+            });
+          } else if (dropMode === "start") {
+            // Ưu tiên 1: Frame đã có End nhưng chưa có Start
+            // Ưu tiên 2: Frame trống hoàn toàn
+            const allFrames = [
+              ...document.querySelectorAll("#flowList .frame-group"),
+            ];
+            const needStart = allFrames.filter((f) => {
+              const s = f.querySelector('input[name^="start_images"]');
+              const e = f.querySelector('input[name^="end_images"]');
+              return (!s || s.files.length === 0) && e && e.files.length > 0;
+            });
+            const emptyFrames = allFrames.filter((f) => {
+              const s = f.querySelector('input[name^="start_images"]');
+              const e = f.querySelector('input[name^="end_images"]');
+              return (
+                (!s || s.files.length === 0) && (!e || e.files.length === 0)
+              );
+            });
+
+            let targets = [...needStart, ...emptyFrames];
+
+            droppedFiles.forEach((file) => {
+              let frame;
+              if (targets.length > 0) {
+                frame = targets.shift();
+              } else {
+                addFullFrame();
+                const all = document.querySelectorAll("#flowList .frame-group");
+                frame = all[all.length - 1];
+              }
+              fillFrame(frame, file, null);
+            });
+          } else if (dropMode === "end") {
+            // Ưu tiên 1: Các frame đã có Start nhưng chưa có End
+            // Ưu tiên 2: Frame trống hoàn toàn
+            const allFrames = [
+              ...document.querySelectorAll("#flowList .frame-group"),
+            ];
+            const needEnd = allFrames.filter((f) => {
+              const s = f.querySelector('input[name^="start_images"]');
+              const e = f.querySelector('input[name^="end_images"]');
+              return s && s.files.length > 0 && (!e || e.files.length === 0);
+            });
+            const emptyFrames = allFrames.filter((f) => {
+              const s = f.querySelector('input[name^="start_images"]');
+              const e = f.querySelector('input[name^="end_images"]');
+              return (
+                (!s || s.files.length === 0) && (!e || e.files.length === 0)
+              );
+            });
+
+            let targets = [...needEnd, ...emptyFrames];
+
+            droppedFiles.forEach((file) => {
+              let frame;
+              if (targets.length > 0) {
+                frame = targets.shift();
+              } else {
+                addFullFrame();
+                const all = document.querySelectorAll("#flowList .frame-group");
+                frame = all[all.length - 1];
+              }
+              fillFrame(frame, null, file);
+            });
           }
 
           clearDropped();

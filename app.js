@@ -10,6 +10,8 @@ const ejs = require("ejs");
 const axios = require("axios");
 const FormData = require("form-data");
 const fs = require("fs");
+const cors = require("cors");
+
 require("dotenv").config();
 
 var indexRouter = require("./routes/index");
@@ -46,7 +48,7 @@ function cleanOldUploads() {
 }
 cleanOldUploads(); // chạy ngay khi khởi động
 setInterval(cleanOldUploads, 60 * 60 * 1000); // chạy mỗi 1 giờ
-
+app.use(cors());
 // Serve static files
 app.use("/uploads", express.static("uploads"));
 

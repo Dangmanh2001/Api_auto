@@ -173,32 +173,34 @@ async function setupPage(aspectRatio, modelType, mode) {
       '//button[.//span[text()="Tạo"]]/preceding-sibling::button',
     );
     await realClick(menuBtn).catch(() => console.log("Menu có vẻ đã mở"));
-    await sleep(600);
+    await sleep(rnd(800, 1500));
 
     // Tab Video
     const videoTab = await waitFor(
       'button.flow_tab_slider_trigger[aria-controls*="VIDEO"]',
     );
     await realClick(videoTab);
-    await sleep(400);
+    await sleep(rnd(1000, 2000));
 
     // Chọn mode: "Khung hình" hoặc "Thành phần"
     await waitForCondition(() => !!findButtonByText(mode));
     const modeBtn = findButtonByText(mode);
     await clickAndVerify(modeBtn, `Chọn ${mode}`);
-    await sleep(400);
+    await sleep(rnd(1200, 2500));
 
     // Chọn tỉ lệ khung hình
     await waitForCondition(() => !!findButtonByText(aspectRatio));
     const ratioBtn = findButtonByText(aspectRatio);
     await clickAndVerify(ratioBtn, `Chọn ${aspectRatio}`);
-    await sleep(400);
+    await sleep(rnd(1000, 1800));
 
     // Chọn model từ dropdown
     const dropdownBtn = await waitForXPath(
       '//button[@aria-haspopup="menu" and contains(., "Veo 3.1")]',
     );
     await realClick(dropdownBtn);
+    await sleep(rnd(800, 1200));
+
     await waitForCondition(
       () => !!document.querySelector("div[role='menu'][data-state='open']"),
     );
@@ -209,12 +211,12 @@ async function setupPage(aspectRatio, modelType, mode) {
     );
     await realClick(optionEl);
     console.log("✅ Đã chọn Model");
-    await sleep(400);
+    await sleep(rnd(1000, 1500));
 
     // Chọn x1
     await waitForCondition(() => !!findButtonByText("x1"));
     await realClick(findButtonByText("x1"));
-    await sleep(300);
+    await sleep(rnd(500, 1000));
   } catch (e) {
     console.log("Setup lỗi nhỏ, tiếp tục:", e.message);
   }
@@ -319,42 +321,44 @@ async function setupImagePage(aspectRatio, modelType) {
       '//button[.//span[text()="Tạo"]]/preceding-sibling::button',
     );
     await realClick(menuBtn).catch(() => console.log("Menu có vẻ đã mở"));
-    await sleep(600);
+    await sleep(rnd(800, 1500));
 
     // Tab Hình ảnh
     const videoTab = await waitFor(
       'button.flow_tab_slider_trigger[aria-controls*="IMAGE"]',
     );
     await realClick(videoTab);
-    await sleep(400);
+    await sleep(rnd(1000, 2000));
 
     // Chọn tỉ lệ khung hình
     await waitForCondition(() => !!findButtonByText(aspectRatio));
     const ratioBtn = findButtonByText(aspectRatio);
     await clickAndVerify(ratioBtn, `Chọn ${aspectRatio}`);
-    await sleep(400);
+    await sleep(rnd(1200, 2000));
 
     // Chọn model từ dropdown
     const dropdownBtn = await waitForXPath(
       '//button[@aria-haspopup="menu" and .//i[text()="arrow_drop_down"]]',
     );
     await realClick(dropdownBtn);
+    await sleep(rnd(800, 1500));
+
     await waitForCondition(
       () => !!document.querySelector("div[role='menu'][data-state='open']"),
     );
-    await sleep(300);
+    await sleep(rnd(500, 1000));
 
     const optionEl = await waitForXPath(
       `//div[@role='menuitem']//span[contains(text(), '${modelType}')]`,
     );
     await realClick(optionEl);
     console.log("✅ Đã chọn Model");
-    await sleep(400);
+    await sleep(rnd(1000, 2000));
 
     // Chọn x1
     await waitForCondition(() => !!findButtonByText("x1"));
     await realClick(findButtonByText("x1"));
-    await sleep(300);
+    await sleep(rnd(500, 1000));
   } catch (e) {
     console.log("Setup lỗi nhỏ, tiếp tục:", e.message);
   }
@@ -446,6 +450,7 @@ async function runTextToVideo(params, log) {
   for (let i = 0; i < promptList.length; i += BATCH_SIZE) {
     const batch = promptList.slice(i, i + BATCH_SIZE);
     log(`📦 Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${batch.length} prompt`);
+    await sleep(rnd(1000, 3000));
 
     for (const prompt of batch) {
       const textbox = await waitFor('[role="textbox"]');
@@ -464,7 +469,7 @@ async function runTextToVideo(params, log) {
 
       if (createBtn) await realClick(createBtn);
       log(`✅ Đã gửi prompt: ${prompt.substring(0, 40)}...`);
-      await sleep(rnd(1200, 2500));
+      await sleep(rnd(3000, 6000));
     }
 
     await waitForVideos(batch.length, log, tilesBefore);
