@@ -444,13 +444,13 @@ async function runTextToVideo(params, log) {
   await setupPage(aspectRatio, modelType, "Khung hình");
   blockEditNavigation();
 
-  const tilesBefore = getTileCount();
   const BATCH_SIZE = rnd(3, 5);
-
   for (let i = 0; i < promptList.length; i += BATCH_SIZE) {
     const batch = promptList.slice(i, i + BATCH_SIZE);
-    log(`📦 Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${batch.length} prompt`);
-    await sleep(rnd(1000, 3000));
+    const tilesBefore = getTileCount();
+    log(
+      `📦 Đang xử lý nhóm ${Math.floor(i / BATCH_SIZE) + 1} (${batch.length} prompts)`,
+    );
 
     for (const prompt of batch) {
       const textbox = await waitFor('[role="textbox"]');
@@ -458,7 +458,6 @@ async function runTextToVideo(params, log) {
       await humanType(textbox, prompt);
       await sleep(rnd(500, 1200));
 
-      // Nút submit — có thể là icon arrow_forward hoặc text "Tạo"
       const createBtn =
         [...document.querySelectorAll("button")].find(
           (b) => b.querySelector("i")?.textContent?.trim() === "arrow_forward",
@@ -468,12 +467,13 @@ async function runTextToVideo(params, log) {
         );
 
       if (createBtn) await realClick(createBtn);
-      log(`✅ Đã gửi prompt: ${prompt.substring(0, 40)}...`);
-      await sleep(rnd(3000, 6000));
+      log(`✅ Đã gửi prompt: ${prompt.substring(0, 30)}...`);
+      await sleep(rnd(2000, 4000)); // Chờ một chút giữa các lần gửi trong batch
     }
 
     await waitForVideos(batch.length, log, tilesBefore);
-    log("🚀 Batch xong!");
+    log(`🚀 Đã hoàn thành nhóm ${Math.floor(i / BATCH_SIZE) + 1}`);
+    await sleep(rnd(1500, 3000));
   }
 }
 
@@ -517,11 +517,12 @@ async function runImageToVideo(params, log, serverUrl) {
   }
 
   const BATCH_SIZE = rnd(3, 5);
-  const tilesBefore = getTileCount();
-
   for (let i = 0; i < tasks.length; i += BATCH_SIZE) {
     const batch = tasks.slice(i, i + BATCH_SIZE);
-    log(`📦 Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${batch.length} task`);
+    const tilesBefore = getTileCount();
+    log(
+      `📦 Đang xử lý nhóm ${Math.floor(i / BATCH_SIZE) + 1} (${batch.length} image tasks)`,
+    );
 
     for (const task of batch) {
       log(`🖼️ Submit: ${task.prompt.substring(0, 40)}...`);
@@ -559,15 +560,12 @@ async function runImageToVideo(params, log, serverUrl) {
       );
       if (createBtn) await realClick(createBtn);
       log(`✅ Đã gửi prompt: ${task.prompt.substring(0, 30)}...`);
-
-      // Chờ UI reset (input file xuất hiện lại) trước khi submit task tiếp theo
-      if (task !== batch[batch.length - 1]) {
-        await sleep(rnd(1200, 2000));
-      }
+      await sleep(rnd(1500, 3000));
     }
 
     await waitForVideos(batch.length, log, tilesBefore);
-    log("🚀 Batch xong!");
+    log(`🚀 Đã hoàn thành nhóm ${Math.floor(i / BATCH_SIZE) + 1}`);
+    await sleep(rnd(1500, 3000));
   }
 }
 
@@ -576,12 +574,13 @@ async function runTextToImage(params, log) {
   await setupImagePage(aspectRatio, modelType);
   blockEditNavigation();
 
-  const tilesBefore = getImageTileCount();
   const BATCH_SIZE = rnd(3, 5);
-
   for (let i = 0; i < promptList.length; i += BATCH_SIZE) {
     const batch = promptList.slice(i, i + BATCH_SIZE);
-    log(`📦 Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${batch.length} prompt`);
+    const tilesBefore = getImageTileCount();
+    log(
+      `📦 Đang xử lý nhóm ảnh ${Math.floor(i / BATCH_SIZE) + 1} (${batch.length} prompts)`,
+    );
 
     for (const prompt of batch) {
       const textbox = await waitFor('[role="textbox"]');
@@ -598,12 +597,13 @@ async function runTextToImage(params, log) {
         );
 
       if (createBtn) await realClick(createBtn);
-      log(`✅ Đã gửi prompt: ${prompt.substring(0, 40)}...`);
-      await sleep(rnd(1200, 2500));
+      log(`✅ Đã gửi prompt: ${prompt.substring(0, 30)}...`);
+      await sleep(rnd(1500, 2500));
     }
 
     await waitForImages(batch.length, log, tilesBefore);
-    log("🚀 Batch xong!");
+    log(`🚀 Đã hoàn thành nhóm ảnh ${Math.floor(i / BATCH_SIZE) + 1}`);
+    await sleep(rnd(1000, 2000));
   }
 }
 
@@ -660,60 +660,49 @@ async function runIngredientsToVideo(params, log, serverUrl) {
     await sleep(rnd(800, 1200));
   }
 
-  const BATCH_SIZE = rnd(3, 5);
-  const tilesBefore = getTileCount();
+  for (let i = 0; i < ingredients.length; i++) {
+    const item = ingredients[i];
+    const tilesBefore = getTileCount();
+    log(`🧪 Đang xử lý ingredient ${i + 1}/${ingredients.length}`);
 
-  for (let i = 0; i < ingredients.length; i += BATCH_SIZE) {
-    const batch = ingredients.slice(i, i + BATCH_SIZE);
-    log(`📦 Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${batch.length} item`);
-
-    for (const item of batch) {
-      log(`🧪 Ingredient: ${item.prompt.substring(0, 40)}...`);
-
-      // Upload
-      const fileInput = await waitFor('input[type="file"]', 30000);
-      const oldImgCount = document.querySelectorAll(
-        'img[src*="getMediaUrlRedirect"]',
-      ).length;
-      await uploadFromServer(serverUrl, item.imageNames, fileInput);
-      await waitForCondition(() => {
-        const imgs = document.querySelectorAll(
-          'img[src*="getMediaUrlRedirect"]',
-        );
-        return (
-          imgs.length >= oldImgCount + item.imageNames.length &&
-          [...imgs].slice(-item.imageNames.length).every((img) => img.complete)
-        );
-      }, 120000);
-      log("✅ Upload ảnh xong");
-
-      // Chọn từng ảnh vào slot ingredient
-      for (const name of item.imageNames) {
-        await selectImageForSlot(name);
-      }
-
-      // Type prompt
-      const textbox = await waitFor('[role="textbox"]');
-      await humanType(textbox, item.prompt);
-      await sleep(rnd(500, 1200));
-
-      // Submit: button có <i>arrow_forward</i>
-      const submitBtn = [...document.querySelectorAll("button")].find(
-        (b) => b.querySelector("i")?.textContent?.trim() === "arrow_forward",
+    // Upload
+    const fileInput = await waitFor('input[type="file"]', 30000);
+    const oldImgCount = document.querySelectorAll(
+      'img[src*="getMediaUrlRedirect"]',
+    ).length;
+    await uploadFromServer(serverUrl, item.imageNames, fileInput);
+    await waitForCondition(() => {
+      const imgs = document.querySelectorAll('img[src*="getMediaUrlRedirect"]');
+      return (
+        imgs.length >= oldImgCount + item.imageNames.length &&
+        [...imgs].slice(-item.imageNames.length).every((img) => img.complete)
       );
-      if (!submitBtn)
-        throw new Error("Không tìm thấy nút submit (arrow_forward)");
+    }, 120000);
+    log("✅ Upload ảnh xong");
 
-      await realClick(submitBtn);
-      log(`✅ Đã gửi ingredient: ${item.prompt.substring(0, 30)}...`);
-
-      if (item !== batch[batch.length - 1]) {
-        await sleep(rnd(1200, 2000));
-      }
+    // Chọn từng ảnh vào slot ingredient
+    for (const name of item.imageNames) {
+      await selectImageForSlot(name);
     }
 
-    await waitForVideos(batch.length, log, tilesBefore);
-    log("🚀 Batch xong!");
+    // Type prompt
+    const textbox = await waitFor('[role="textbox"]');
+    await humanType(textbox, item.prompt);
+    await sleep(rnd(500, 1200));
+
+    // Submit: button có <i>arrow_forward</i>
+    const submitBtn = [...document.querySelectorAll("button")].find(
+      (b) => b.querySelector("i")?.textContent?.trim() === "arrow_forward",
+    );
+    if (!submitBtn)
+      throw new Error("Không tìm thấy nút submit (arrow_forward)");
+
+    await realClick(submitBtn);
+    log(`✅ Đã gửi ingredient: ${item.prompt.substring(0, 30)}...`);
+
+    await waitForVideos(1, log, tilesBefore);
+    log(`🚀 Xong item ${i + 1}`);
+    await sleep(rnd(1500, 2500));
   }
 }
 

@@ -338,10 +338,12 @@ async function runTextToVideo(params, log) {
       if (frame === page.mainFrame()) blockEditNavigation(page).catch(() => {});
     });
 
-    const BATCH_SIZE = Math.floor(rnd(3, 6));
+    const BATCH_SIZE = Math.floor(rnd(3, 5));
     for (let i = 0; i < promptList.length; i += BATCH_SIZE) {
       const batch = promptList.slice(i, i + BATCH_SIZE);
-      log(`📦 Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${batch.length} prompt`);
+      log(
+        `📦 Đang xử lý nhóm ${Math.floor(i / BATCH_SIZE) + 1} (${batch.length} prompts)`,
+      );
 
       for (const prompt of batch) {
         await page.waitForSelector('[role="textbox"]', {
@@ -352,6 +354,7 @@ async function runTextToVideo(params, log) {
         await sleep(rnd(300, 700));
         await humanType(page, '[role="textbox"]', prompt);
         await sleep(rnd(500, 1200));
+
         const createBtn = await page.$("button ::-p-text(Tạo)");
         if (createBtn) {
           await createBtn.evaluate((btn) =>
@@ -360,13 +363,13 @@ async function runTextToVideo(params, log) {
             ),
           );
         }
-        log(`✅ Submit: ${prompt.substring(0, 40)}...`);
-        await sleep(rnd(3000, 5000));
+        log(`✅ Submit: ${prompt.substring(0, 30)}...`);
+        await sleep(rnd(2000, 4000));
       }
 
-      log(`⏳ Đợi ${batch.length} video render...`);
       await waitForVideos(page, batch.length);
-      log("🚀 Batch xong!");
+      log(`🚀 Xong nhóm ${Math.floor(i / BATCH_SIZE) + 1}`);
+      await sleep(rnd(1500, 2500));
     }
   } finally {
     await browser.close().catch(() => {});
