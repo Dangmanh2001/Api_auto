@@ -71,6 +71,73 @@ function findButtonByText(text) {
   );
 }
 
+function setNativeInputValue(input, value) {
+  if (!input) return;
+  const prototype = Object.getPrototypeOf(input);
+  const descriptor = Object.getOwnPropertyDescriptor(prototype, "value");
+  descriptor?.set?.call(input, value);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+function getUploadedImageNodes() {
+  return [...document.querySelectorAll("img")].filter((img) => {
+    const src = img.getAttribute("src") || "";
+    const alt = img.getAttribute("alt") || "";
+    return (
+      src.includes("getMediaUrlRedirect") ||
+      src.startsWith("blob:") ||
+      alt.trim().length > 0
+    );
+  });
+}
+
+function imageLooksReady(img) {
+  return !!img && (img.complete || img.naturalWidth > 0);
+}
+
+async function waitForUploadedImages(names, timeout = 60000) {
+  const beforeNodes = getUploadedImageNodes();
+  const beforeSet = new Set(beforeNodes);
+
+  await waitForCondition(() => {
+    const currentNodes = getUploadedImageNodes();
+    const namedReady = names.every((name) =>
+      currentNodes.some((img) => {
+        const alt = img.getAttribute("alt") || "";
+        const src = img.getAttribute("src") || "";
+        return (
+          imageLooksReady(img) &&
+          (alt === name || alt.includes(name) || src.includes(encodeURIComponent(name)))
+        );
+      }),
+    );
+    if (namedReady) return true;
+
+    const newReadyCount = currentNodes.filter(
+      (img) => !beforeSet.has(img) && imageLooksReady(img),
+    ).length;
+    return newReadyCount >= names.length;
+  }, timeout);
+}
+
+function getIndexedItemCount() {
+  const indexes = new Set();
+  for (const el of document.querySelectorAll("[data-item-index]")) {
+    const raw = el.getAttribute("data-item-index");
+    const index = Number.parseInt(raw || "", 10);
+    if (Number.isInteger(index)) indexes.add(index);
+  }
+  return indexes.size;
+}
+
+function resolveBatchSize(total, preferred = 4) {
+  if (!Number.isFinite(total) || total <= 0) return 1;
+  const size = Number.parseInt(preferred, 10);
+  if (!Number.isInteger(size) || size <= 0) return Math.min(4, total);
+  return Math.min(size, total);
+}
+
 // Gõ trong main world của trang qua CDP Runtime.evaluate
 // React nhận đúng state vì execCommand chạy cùng world với React
 async function humanType(_element, text) {
@@ -137,14 +204,52 @@ function blockEditNavigation() {
 
 // Đếm số lượng video tiles đang có trên trang
 function getTileCount() {
-  const items = document.querySelectorAll("[data-item-index]");
-  if (!items.length) return 0;
-  const maxIndex = Math.max(
-    ...[...items].map((el) =>
-      parseInt(el.getAttribute("data-item-index") || "0"),
-    ),
-  );
-  return (maxIndex + 1) * 2;
+  return getIndexedItemCount();
+}
+
+function getIndexedItems() {
+  return [...document.querySelectorAll("[data-item-index]")]
+    .map((el) => ({
+      el,
+      index: Number.parseInt(el.getAttribute("data-item-index") || "", 10),
+    }))
+    .filter((item) => Number.isInteger(item.index))
+    .sort((a, b) => a.index - b.index);
+}
+
+function getLastIndexedItem() {
+  const items = getIndexedItems();
+  return items.length ? items[items.length - 1].el : null;
+}
+
+function hasProgressText(root) {
+  return [...root.querySelectorAll("*")]
+    .filter((el) => el.childElementCount === 0 && el.textContent)
+    .some((el) => /^\d+%$/.test(el.textContent.trim()));
+}
+
+function hasRetryButton(root) {
+  return [...root.querySelectorAll("button")].some((b) => {
+    const btnText = b.textContent || "";
+    return (
+      btnText.includes("Thử lại") ||
+      b.querySelector("i")?.textContent?.trim() === "refresh"
+    );
+  });
+}
+
+function isVideoTileComplete(tile) {
+  if (!tile) return false;
+  if (
+    tile.querySelector(
+      '[class*="generating"], [class*="spinner"], [aria-busy="true"]',
+    )
+  ) {
+    return false;
+  }
+  if (hasProgressText(tile)) return false;
+  if (hasRetryButton(tile)) return false;
+  return true;
 }
 
 // ==================== SETUP PAGE ====================
@@ -369,14 +474,7 @@ async function setupImagePage(aspectRatio, modelType) {
 // ==================== WAIT FOR IMAGES ====================
 
 function getImageTileCount() {
-  const items = document.querySelectorAll("[data-item-index]");
-  if (!items.length) return 0;
-  const maxIndex = Math.max(
-    ...[...items].map((el) =>
-      parseInt(el.getAttribute("data-item-index") || "0"),
-    ),
-  );
-  return maxIndex + 1;
+  return getIndexedItemCount();
 }
 
 async function waitForImages(expectedCount, log, tilesBefore = 0) {
@@ -440,16 +538,17 @@ async function waitForImages(expectedCount, log, tilesBefore = 0) {
 // ==================== TASK RUNNERS ====================
 
 async function runTextToVideo(params, log) {
-  const { aspectRatio, modelType, promptList } = params;
+  const { aspectRatio, modelType, promptList, batchSize } = params;
   await setupPage(aspectRatio, modelType, "Khung hình");
   blockEditNavigation();
 
-  const BATCH_SIZE = rnd(3, 5);
-  for (let i = 0; i < promptList.length; i += BATCH_SIZE) {
-    const batch = promptList.slice(i, i + BATCH_SIZE);
+  const effectiveBatchSize = resolveBatchSize(promptList.length, batchSize ?? 4);
+  for (let i = 0; i < promptList.length; i += effectiveBatchSize) {
+    const batch = promptList.slice(i, i + effectiveBatchSize);
+    const groupNumber = Math.floor(i / effectiveBatchSize) + 1;
     const tilesBefore = getTileCount();
     log(
-      `📦 Đang xử lý nhóm ${Math.floor(i / BATCH_SIZE) + 1} (${batch.length} prompts)`,
+      `📦 Đang xử lý nhóm ${groupNumber} (${batch.length} prompts)`,
     );
 
     for (const prompt of batch) {
@@ -472,13 +571,13 @@ async function runTextToVideo(params, log) {
     }
 
     await waitForVideos(batch.length, log, tilesBefore);
-    log(`🚀 Đã hoàn thành nhóm ${Math.floor(i / BATCH_SIZE) + 1}`);
+    log(`🚀 Đã hoàn thành nhóm ${groupNumber}`);
     await sleep(rnd(1500, 3000));
   }
 }
 
 async function runImageToVideo(params, log, serverUrl) {
-  const { aspectRatio, modelType, tasks } = params;
+  const { aspectRatio, modelType, tasks, batchSize } = params;
   await setupPage(aspectRatio, modelType, "Khung hình");
   blockEditNavigation();
 
@@ -501,11 +600,7 @@ async function runImageToVideo(params, log, serverUrl) {
     const input = document.querySelector(inputSelector);
 
     input.click();
-    input.value = fileName;
-
-    // trigger để React/Vue nhận
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-    input.dispatchEvent(new Event("change", { bubbles: true }));
+    setNativeInputValue(input, fileName);
 
     log(`Đã nhập tên ảnh vào ô tìm kiếm`);
     await waitForCondition(
@@ -516,12 +611,13 @@ async function runImageToVideo(params, log, serverUrl) {
     log(`Đã chọn: ${fileName}`);
   }
 
-  const BATCH_SIZE = rnd(3, 5);
-  for (let i = 0; i < tasks.length; i += BATCH_SIZE) {
-    const batch = tasks.slice(i, i + BATCH_SIZE);
+  const effectiveBatchSize = resolveBatchSize(tasks.length, batchSize ?? 4);
+  for (let i = 0; i < tasks.length; i += effectiveBatchSize) {
+    const batch = tasks.slice(i, i + effectiveBatchSize);
+    const groupNumber = Math.floor(i / effectiveBatchSize) + 1;
     const tilesBefore = getTileCount();
     log(
-      `📦 Đang xử lý nhóm ${Math.floor(i / BATCH_SIZE) + 1} (${batch.length} image tasks)`,
+      `📦 Đang xử lý nhóm ${groupNumber} (${batch.length} image tasks)`,
     );
 
     for (const task of batch) {
@@ -531,19 +627,8 @@ async function runImageToVideo(params, log, serverUrl) {
       const filenames = [task.startImageName];
       if (task.endImageName) filenames.push(task.endImageName);
 
-      const oldImgCount = document.querySelectorAll(
-        'img[src*="getMediaUrlRedirect"]',
-      ).length;
       await uploadFromServer(serverUrl, filenames, fileInput);
-      await waitForCondition(() => {
-        const imgs = document.querySelectorAll(
-          'img[src*="getMediaUrlRedirect"]',
-        );
-        return (
-          imgs.length >= oldImgCount + filenames.length &&
-          [...imgs].slice(-filenames.length).every((img) => img.complete)
-        );
-      }, 120000);
+      await waitForUploadedImages(filenames, 60000);
       log("✅ Upload xong");
 
       await selectImage("Bắt đầu", task.startImageName);
@@ -564,22 +649,23 @@ async function runImageToVideo(params, log, serverUrl) {
     }
 
     await waitForVideos(batch.length, log, tilesBefore);
-    log(`🚀 Đã hoàn thành nhóm ${Math.floor(i / BATCH_SIZE) + 1}`);
+    log(`🚀 Đã hoàn thành nhóm ${groupNumber}`);
     await sleep(rnd(1500, 3000));
   }
 }
 
 async function runTextToImage(params, log) {
-  const { aspectRatio, modelType, promptList } = params;
+  const { aspectRatio, modelType, promptList, batchSize } = params;
   await setupImagePage(aspectRatio, modelType);
   blockEditNavigation();
 
-  const BATCH_SIZE = rnd(3, 5);
-  for (let i = 0; i < promptList.length; i += BATCH_SIZE) {
-    const batch = promptList.slice(i, i + BATCH_SIZE);
+  const effectiveBatchSize = resolveBatchSize(promptList.length, batchSize ?? 4);
+  for (let i = 0; i < promptList.length; i += effectiveBatchSize) {
+    const batch = promptList.slice(i, i + effectiveBatchSize);
+    const groupNumber = Math.floor(i / effectiveBatchSize) + 1;
     const tilesBefore = getImageTileCount();
     log(
-      `📦 Đang xử lý nhóm ảnh ${Math.floor(i / BATCH_SIZE) + 1} (${batch.length} prompts)`,
+      `📦 Đang xử lý nhóm ảnh ${groupNumber} (${batch.length} prompts)`,
     );
 
     for (const prompt of batch) {
@@ -602,7 +688,7 @@ async function runTextToImage(params, log) {
     }
 
     await waitForImages(batch.length, log, tilesBefore);
-    log(`🚀 Đã hoàn thành nhóm ảnh ${Math.floor(i / BATCH_SIZE) + 1}`);
+    log(`🚀 Đã hoàn thành nhóm ảnh ${groupNumber}`);
     await sleep(rnd(1000, 2000));
   }
 }
@@ -640,7 +726,7 @@ async function runIngredientsToVideo(params, log, serverUrl) {
     // Focus + clear, sau đó gõ bằng CDP để React nhận keyboard events và trigger filter
     await realClick(searchInput);
     await sleep(200);
-    setReactInputValue(searchInput, "");
+    setNativeInputValue(searchInput, "");
     await sleep(100);
     await humanType(searchInput, name);
     await sleep(rnd(500, 900));
@@ -667,17 +753,8 @@ async function runIngredientsToVideo(params, log, serverUrl) {
 
     // Upload
     const fileInput = await waitFor('input[type="file"]', 30000);
-    const oldImgCount = document.querySelectorAll(
-      'img[src*="getMediaUrlRedirect"]',
-    ).length;
     await uploadFromServer(serverUrl, item.imageNames, fileInput);
-    await waitForCondition(() => {
-      const imgs = document.querySelectorAll('img[src*="getMediaUrlRedirect"]');
-      return (
-        imgs.length >= oldImgCount + item.imageNames.length &&
-        [...imgs].slice(-item.imageNames.length).every((img) => img.complete)
-      );
-    }, 120000);
+    await waitForUploadedImages(item.imageNames, 60000);
     log("✅ Upload ảnh xong");
 
     // Chọn từng ảnh vào slot ingredient
