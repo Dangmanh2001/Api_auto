@@ -3,6 +3,30 @@
 const rnd = (min, max) => Math.floor(Math.random() * (max - min + 1) + min);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+function randomChance(probability) {
+  return Math.random() < probability;
+}
+
+async function humanPause(range = [800, 1800], options = {}) {
+  const [min, max] = range;
+  await sleep(rnd(min, max));
+
+  const {
+    microPauseChance = 0.2,
+    microPauseRange = [250, 700],
+    longPauseChance = 0,
+    longPauseRange = [4000, 9000],
+  } = options;
+
+  if (microPauseChance > 0 && randomChance(microPauseChance)) {
+    await sleep(rnd(microPauseRange[0], microPauseRange[1]));
+  }
+
+  if (longPauseChance > 0 && randomChance(longPauseChance)) {
+    await sleep(rnd(longPauseRange[0], longPauseRange[1]));
+  }
+}
+
 // ==================== HELPERS ====================
 
 async function waitFor(selector, timeout = 30000) {
@@ -150,7 +174,10 @@ async function humanType(_element, text) {
       },
     );
   });
-  await sleep(rnd(200, 400));
+  await humanPause([350, 900], {
+    microPauseChance: 0.35,
+    microPauseRange: [300, 900],
+  });
 }
 
 // Tải file từ server qua background (tránh mixed content HTTPS→HTTP)
@@ -175,7 +202,10 @@ async function uploadFromServer(serverUrl, filenames, fileInput) {
 // Click và verify state (giống clickAndVerify trong Puppeteer)
 async function clickAndVerify(el, description) {
   await realClick(el);
-  await sleep(500);
+  await humanPause([450, 1100], {
+    microPauseChance: 0.15,
+    microPauseRange: [200, 500],
+  });
   const isSelected =
     el.getAttribute("data-state") === "active" ||
     el.getAttribute("aria-selected") === "true" ||
@@ -575,9 +605,15 @@ async function runTextToVideo(params, log) {
 
     for (const prompt of batch) {
       const textbox = await waitFor('[role="textbox"]');
-      await sleep(rnd(300, 700));
+      await humanPause([600, 1500], {
+        microPauseChance: 0.25,
+        microPauseRange: [250, 700],
+      });
       await humanType(textbox, prompt);
-      await sleep(rnd(500, 1200));
+      await humanPause([1200, 2800], {
+        microPauseChance: 0.3,
+        microPauseRange: [400, 1200],
+      });
 
       const createBtn =
         [...document.querySelectorAll("button")].find(
@@ -589,12 +625,22 @@ async function runTextToVideo(params, log) {
 
       if (createBtn) await realClick(createBtn);
       log(`✅ Đã gửi prompt: ${prompt.substring(0, 30)}...`);
-      await sleep(rnd(2000, 4000)); // Chờ một chút giữa các lần gửi trong batch
+      await humanPause([5000, 12000], {
+        microPauseChance: 0.35,
+        microPauseRange: [800, 2200],
+        longPauseChance: 0.18,
+        longPauseRange: [12000, 25000],
+      });
     }
 
     await waitForVideos(batch.length, log, previousTopSignature);
     log(`🚀 Đã hoàn thành nhóm ${groupNumber}`);
-    await sleep(rnd(1500, 3000));
+    await humanPause([6000, 14000], {
+      microPauseChance: 0.25,
+      microPauseRange: [1000, 2500],
+      longPauseChance: 0.12,
+      longPauseRange: [15000, 30000],
+    });
   }
 }
 
@@ -658,7 +704,10 @@ async function runImageToVideo(params, log, serverUrl) {
 
       const textbox = await waitFor('[role="textbox"]');
       await humanType(textbox, task.prompt);
-      await sleep(rnd(500, 1200));
+      await humanPause([1500, 3200], {
+        microPauseChance: 0.3,
+        microPauseRange: [500, 1200],
+      });
 
       const createBtn = [...document.querySelectorAll("button")].find(
         (b) =>
@@ -667,12 +716,22 @@ async function runImageToVideo(params, log, serverUrl) {
       );
       if (createBtn) await realClick(createBtn);
       log(`✅ Đã gửi prompt: ${task.prompt.substring(0, 30)}...`);
-      await sleep(rnd(1500, 3000));
+      await humanPause([6000, 13000], {
+        microPauseChance: 0.35,
+        microPauseRange: [800, 2000],
+        longPauseChance: 0.18,
+        longPauseRange: [12000, 24000],
+      });
     }
 
     await waitForVideos(batch.length, log, previousTopSignature);
     log(`🚀 Đã hoàn thành nhóm ${groupNumber}`);
-    await sleep(rnd(1500, 3000));
+    await humanPause([7000, 15000], {
+      microPauseChance: 0.25,
+      microPauseRange: [1000, 2500],
+      longPauseChance: 0.12,
+      longPauseRange: [15000, 30000],
+    });
   }
 }
 
@@ -692,9 +751,15 @@ async function runTextToImage(params, log) {
 
     for (const prompt of batch) {
       const textbox = await waitFor('[role="textbox"]');
-      await sleep(rnd(300, 700));
+      await humanPause([600, 1500], {
+        microPauseChance: 0.25,
+        microPauseRange: [250, 700],
+      });
       await humanType(textbox, prompt);
-      await sleep(rnd(500, 1200));
+      await humanPause([1200, 2500], {
+        microPauseChance: 0.3,
+        microPauseRange: [400, 1000],
+      });
 
       const createBtn =
         [...document.querySelectorAll("button")].find(
@@ -706,12 +771,22 @@ async function runTextToImage(params, log) {
 
       if (createBtn) await realClick(createBtn);
       log(`✅ Đã gửi prompt: ${prompt.substring(0, 30)}...`);
-      await sleep(rnd(1500, 2500));
+      await humanPause([4000, 9000], {
+        microPauseChance: 0.3,
+        microPauseRange: [700, 1800],
+        longPauseChance: 0.15,
+        longPauseRange: [10000, 18000],
+      });
     }
 
     await waitForImages(batch.length, log, tilesBefore);
     log(`🚀 Đã hoàn thành nhóm ảnh ${groupNumber}`);
-    await sleep(rnd(1000, 2000));
+    await humanPause([5000, 11000], {
+      microPauseChance: 0.25,
+      microPauseRange: [800, 2000],
+      longPauseChance: 0.1,
+      longPauseRange: [12000, 22000],
+    });
   }
 }
 
@@ -787,7 +862,10 @@ async function runIngredientsToVideo(params, log, serverUrl) {
     // Type prompt
     const textbox = await waitFor('[role="textbox"]');
     await humanType(textbox, item.prompt);
-    await sleep(rnd(500, 1200));
+    await humanPause([1500, 3200], {
+      microPauseChance: 0.25,
+      microPauseRange: [500, 1200],
+    });
 
     // Submit: button có <i>arrow_forward</i>
     const submitBtn = [...document.querySelectorAll("button")].find(
@@ -801,7 +879,12 @@ async function runIngredientsToVideo(params, log, serverUrl) {
 
     await waitForVideos(1, log, previousTopSignature);
     log(`🚀 Xong item ${i + 1}`);
-    await sleep(rnd(1500, 2500));
+    await humanPause([6000, 13000], {
+      microPauseChance: 0.25,
+      microPauseRange: [800, 1800],
+      longPauseChance: 0.12,
+      longPauseRange: [12000, 24000],
+    });
   }
 }
 

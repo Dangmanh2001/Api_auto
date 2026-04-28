@@ -86,7 +86,7 @@ function setupTaskStream() {
 
       await new Promise((resolve, reject) => {
         chrome.runtime.sendMessage(
-          { action: "run-task", taskId: id, type, params },
+          { action: "run-task", taskId: id, type, params, serverUrl: SERVER },
           (res) => {
             if (chrome.runtime.lastError) {
               reject(new Error(chrome.runtime.lastError.message));

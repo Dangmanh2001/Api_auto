@@ -107,9 +107,10 @@ function findChrome() {
   return candidates.find((p) => fs.existsSync(p)) || null;
 }
 
-function startAgent(profilePath) {
+function startAgent(profilePath, serverUrl) {
   if (agentProcess) return { ok: false, msg: "Agent đang chạy" };
   if (!profilePath) return { ok: false, msg: "Chưa nhập đường dẫn profile" };
+  if (!serverUrl) return { ok: false, msg: "Thiếu địa chỉ server để mở Agent" };
 
   const chromePath = findChrome();
   if (!chromePath) return { ok: false, msg: "Không tìm thấy Chrome trên máy" };
@@ -132,7 +133,7 @@ function startAgent(profilePath) {
     `--profile-directory=${profileDir}`,
     "--no-first-run",
     "--no-default-browser-check",
-    "http://localhost:3000",
+    serverUrl,
   ]);
 
   agentPid = agentProcess.pid;
@@ -313,9 +314,10 @@ router.get("/task/:id", (req, res) => {
 });
 
 // Khởi động agent
-router.post("/agent/start", (req, res) =>
-  res.json(startAgent(req.body.profilePath)),
-);
+router.post("/agent/start", (req, res) => {
+  const serverUrl = `${req.protocol}://${req.get("host")}`;
+  res.json(startAgent(req.body.profilePath, serverUrl));
+});
 
 // Dừng agent
 router.post("/agent/stop", (_req, res) => res.json(stopAgent()));

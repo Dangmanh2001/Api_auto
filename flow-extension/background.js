@@ -1,4 +1,3 @@
-const SERVER = "http://localhost:3000";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ==================== AGENT ID ====================
@@ -120,7 +119,11 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 });
 
 // ==================== RUN TASK ====================
-async function runTask({ taskId, type, params }) {
+async function runTask({ taskId, type, params, serverUrl }) {
+  const resolvedServerUrl = (serverUrl || "http://localhost:3000").replace(
+    /\/$/,
+    "",
+  );
   const tab = await chrome.tabs.create({
     url: "https://labs.google/fx/vi/tools/flow",
     active: false,
@@ -161,7 +164,7 @@ async function runTask({ taskId, type, params }) {
       taskId,
       type,
       params,
-      serverUrl: SERVER,
+      serverUrl: resolvedServerUrl,
       tabId: tab.id,
     });
   });

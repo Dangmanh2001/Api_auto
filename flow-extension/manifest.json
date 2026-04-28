@@ -5,9 +5,7 @@
   "description": "Automation agent cho Google Flow - chạy trực tiếp trên máy khách",
   "permissions": ["tabs", "scripting", "storage", "debugger"],
   "host_permissions": [
-    "http://192.168.1.89/*",
-    "http://192.168.1.65/*",
-    "http://192.168.1.34/*",
+    "http://*/*",
     "http://localhost/*",
     "https://labs.google/*"
   ],
@@ -16,7 +14,7 @@
   },
   "content_scripts": [
     {
-      "matches": ["http://192.168.1.89:3000/*", "http://192.168.1.65:3000/*", "http://192.168.1.34:3000/*", "http://localhost:3000/*"],
+      "matches": ["http://*/*", "http://localhost/*"],
       "js": ["content-web.js"],
       "run_at": "document_idle"
     },
