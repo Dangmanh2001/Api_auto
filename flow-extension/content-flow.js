@@ -222,6 +222,41 @@ function getLastIndexedItem() {
   return items.length ? items[items.length - 1].el : null;
 }
 
+function getTopVisibleIndexedItem() {
+  const items = getIndexedItems()
+    .map((item) => {
+      const rect = item.el.getBoundingClientRect();
+      return {
+        ...item,
+        rect,
+      };
+    })
+    .filter(
+      (item) =>
+        item.rect.width > 0 &&
+        item.rect.height > 0 &&
+        item.rect.bottom > 0 &&
+        item.rect.right > 0,
+    )
+    .sort((a, b) => {
+      if (a.rect.top !== b.rect.top) return a.rect.top - b.rect.top;
+      return a.rect.left - b.rect.left;
+    });
+
+  return items.length ? items[0].el : null;
+}
+
+function getTileSignature(tile) {
+  if (!tile) return "";
+  const index = tile.getAttribute("data-item-index") || "";
+  const text = tile.textContent?.trim() || "";
+  const media =
+    tile.querySelector("video")?.getAttribute("src") ||
+    tile.querySelector("img")?.getAttribute("src") ||
+    "";
+  return `${index}::${text}::${media}`;
+}
+
 function hasProgressText(root) {
   return [...root.querySelectorAll("*")]
     .filter((el) => el.childElementCount === 0 && el.textContent)
@@ -331,36 +366,24 @@ async function setupPage(aspectRatio, modelType, mode) {
 
 // ==================== WAIT FOR VIDEOS ====================
 
-async function waitForVideos(expectedCount, log, tilesBeforeOverride = null) {
-  const tilesBefore =
-    tilesBeforeOverride !== null ? tilesBeforeOverride : getTileCount();
-  const expectedTiles = tilesBefore + expectedCount;
+async function waitForVideos(_expectedCount, log, previousTopSignature = "") {
   let stableCount = 0;
   const STABLE_NEEDED = 3;
   const TIMEOUT_MS = 10 * 60 * 1000;
   const startTime = Date.now();
-  let lastLogTiles = -1;
 
-  log(`⏳ Chờ render: ${tilesBefore} → ${expectedTiles} tiles`);
+  log("Chờ video đầu nhóm hoàn thành...");
 
   while (true) {
     await sleep(rnd(2500, 5000));
 
     if (Date.now() - startTime > TIMEOUT_MS) {
-      log("⏰ Timeout 10 phút — bỏ qua");
+      log("Timeout 10 phút — bỏ qua");
       break;
     }
 
-    const currentTiles = getTileCount();
-    if (currentTiles !== lastLogTiles) {
-      log(`📊 Tiles: ${currentTiles}/${expectedTiles}`);
-      lastLogTiles = currentTiles;
-    }
-
-    // Bấm Thử lại nếu có
     const retryBtns = [...document.querySelectorAll("button")].filter((b) => {
       const btnText = b.textContent || "";
-      // Kiểm tra xem nút có chứa text "Thử lại" (kể cả text ẩn) hoặc icon "refresh"
       return (
         btnText.includes("Thử lại") ||
         b.querySelector("i")?.textContent?.trim() === "refresh"
@@ -369,37 +392,36 @@ async function waitForVideos(expectedCount, log, tilesBeforeOverride = null) {
 
     if (retryBtns.length > 0) {
       stableCount = 0;
-      log(
-        `⚠️ Phát hiện ${retryBtns.length} video bị lỗi, đang tự động bấm Thử lại...`,
-      );
-      // Bấm nút đầu tiên lỗi tìm thấy
-      const pick = retryBtns[0];
-      await realClick(pick);
-      await sleep(rnd(1500, 3000)); // Chờ UI phản hồi
+      log(`Phát hiện ${retryBtns.length} video bị lỗi, đang tự động bấm Thử lại...`);
+      await realClick(retryBtns[0]);
+      await sleep(rnd(1500, 3000));
       continue;
     }
 
-    // Kiểm tra loading: class generating/spinner/aria-busy HOẶC BẤT KỲ leaf node nào trên trang đang hiện %
-    const isLoading =
-      !!document.querySelector(
-        '[class*="generating"], [class*="spinner"], [aria-busy="true"]',
-      ) ||
-      [...document.querySelectorAll("*")]
-        .filter((el) => el.childElementCount === 0 && el.textContent)
-        .some((el) => /^\d+%$/.test(el.textContent.trim()));
-
-    if (isLoading) {
+    const topTile = getTopVisibleIndexedItem();
+    if (!topTile) {
       stableCount = 0;
-    } else {
-      stableCount++;
-      if (stableCount >= STABLE_NEEDED && currentTiles >= expectedTiles) {
-        log("✅ Render xong!");
-        break;
-      }
+      continue;
+    }
+
+    const currentTopSignature = getTileSignature(topTile);
+    if (previousTopSignature && currentTopSignature === previousTopSignature) {
+      stableCount = 0;
+      continue;
+    }
+
+    if (!isVideoTileComplete(topTile)) {
+      stableCount = 0;
+      continue;
+    }
+
+    stableCount++;
+    if (stableCount >= STABLE_NEEDED) {
+      log("Render xong!");
+      break;
     }
   }
 }
-
 // ==================== SETUP IMAGE PAGE ====================
 
 async function setupImagePage(aspectRatio, modelType) {
@@ -546,7 +568,7 @@ async function runTextToVideo(params, log) {
   for (let i = 0; i < promptList.length; i += effectiveBatchSize) {
     const batch = promptList.slice(i, i + effectiveBatchSize);
     const groupNumber = Math.floor(i / effectiveBatchSize) + 1;
-    const tilesBefore = getTileCount();
+    const previousTopSignature = getTileSignature(getTopVisibleIndexedItem());
     log(
       `📦 Đang xử lý nhóm ${groupNumber} (${batch.length} prompts)`,
     );
@@ -570,7 +592,7 @@ async function runTextToVideo(params, log) {
       await sleep(rnd(2000, 4000)); // Chờ một chút giữa các lần gửi trong batch
     }
 
-    await waitForVideos(batch.length, log, tilesBefore);
+    await waitForVideos(batch.length, log, previousTopSignature);
     log(`🚀 Đã hoàn thành nhóm ${groupNumber}`);
     await sleep(rnd(1500, 3000));
   }
@@ -615,7 +637,7 @@ async function runImageToVideo(params, log, serverUrl) {
   for (let i = 0; i < tasks.length; i += effectiveBatchSize) {
     const batch = tasks.slice(i, i + effectiveBatchSize);
     const groupNumber = Math.floor(i / effectiveBatchSize) + 1;
-    const tilesBefore = getTileCount();
+    const previousTopSignature = getTileSignature(getTopVisibleIndexedItem());
     log(
       `📦 Đang xử lý nhóm ${groupNumber} (${batch.length} image tasks)`,
     );
@@ -648,7 +670,7 @@ async function runImageToVideo(params, log, serverUrl) {
       await sleep(rnd(1500, 3000));
     }
 
-    await waitForVideos(batch.length, log, tilesBefore);
+    await waitForVideos(batch.length, log, previousTopSignature);
     log(`🚀 Đã hoàn thành nhóm ${groupNumber}`);
     await sleep(rnd(1500, 3000));
   }
@@ -748,7 +770,7 @@ async function runIngredientsToVideo(params, log, serverUrl) {
 
   for (let i = 0; i < ingredients.length; i++) {
     const item = ingredients[i];
-    const tilesBefore = getTileCount();
+    const previousTopSignature = getTileSignature(getTopVisibleIndexedItem());
     log(`🧪 Đang xử lý ingredient ${i + 1}/${ingredients.length}`);
 
     // Upload
@@ -777,7 +799,7 @@ async function runIngredientsToVideo(params, log, serverUrl) {
     await realClick(submitBtn);
     log(`✅ Đã gửi ingredient: ${item.prompt.substring(0, 30)}...`);
 
-    await waitForVideos(1, log, tilesBefore);
+    await waitForVideos(1, log, previousTopSignature);
     log(`🚀 Xong item ${i + 1}`);
     await sleep(rnd(1500, 2500));
   }
