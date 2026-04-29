@@ -12,6 +12,7 @@ module.exports = {
     try {
       const aspectRatio = req.body.aspectRatio;
       const modelType = req.body.modelType;
+      const renderCount = req.body.renderCount || "x1";
       const agentId = req.agentId || req.body.agentId || null;
 
       const prompts = req.body.prompts;
@@ -26,7 +27,11 @@ module.exports = {
         return { prompt: (prompt || "").trim() || DEFAULT_PROMPT, imageNames };
       });
 
-      taskQueue.create("ingredients-to-video", { aspectRatio, modelType, ingredients }, agentId);
+      taskQueue.create(
+        "ingredients-to-video",
+        { aspectRatio, modelType, renderCount, ingredients },
+        agentId,
+      );
       return res.redirect("/api/IngredientsToVideo");
     } catch (error) {
       console.error(error);

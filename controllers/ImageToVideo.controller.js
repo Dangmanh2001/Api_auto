@@ -15,6 +15,7 @@ module.exports = {
 
       const aspectRatio = req.body.aspectRatio;
       const modelType = req.body.modelType;
+      const renderCount = req.body.renderCount || "x1";
 
       // Map files theo index: start_images[0], end_images[0], start_images[1], ...
       const fileMap = {};
@@ -58,7 +59,7 @@ module.exports = {
 
       taskQueue.create(
         "image-to-video",
-        { aspectRatio, modelType, tasks: taskPayload },
+        { aspectRatio, modelType, renderCount, tasks: taskPayload },
         agentId,
       );
       return res.redirect("/api/imageToVideo");

@@ -12,6 +12,7 @@ module.exports = {
     try {
       const aspectRatio = req.body.aspectRatio;
       const modelType = req.body.modelType;
+      const renderCount = req.body.renderCount || "x1";
       const agentId = req.agentId || req.body.agentId || null;
 
       const DEFAULT_PROMPT =
@@ -26,7 +27,7 @@ module.exports = {
 
       taskQueue.create(
         "text-to-video",
-        { aspectRatio, modelType, promptList },
+        { aspectRatio, modelType, renderCount, promptList },
         agentId,
       );
       return res.redirect("/api");

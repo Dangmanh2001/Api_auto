@@ -1,4 +1,4 @@
-// content-flow.js - chạy trên https://labs.google/fx/vi/tools/flow
+﻿// content-flow.js - chạy trên https://labs.google/fx/vi/tools/flow
 
 const rnd = (min, max) => Math.floor(Math.random() * (max - min + 1) + min);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -95,6 +95,21 @@ function findButtonByText(text) {
   );
 }
 
+function normalizeRenderCount(value) {
+  if (value === undefined || value === null) return "x1";
+  const raw = String(value).trim().toLowerCase();
+  if (/^x[1-4]$/.test(raw)) return raw;
+  if (/^[1-4]$/.test(raw)) return `x${raw}`;
+  return "x1";
+}
+
+function findRenderCountButton(value) {
+  const target = normalizeRenderCount(value);
+  return [...document.querySelectorAll("button")].find(
+    (b) => b.textContent?.trim().toLowerCase() === target,
+  );
+}
+
 function setNativeInputValue(input, value) {
   if (!input) return;
   const prototype = Object.getPrototypeOf(input);
@@ -132,7 +147,9 @@ async function waitForUploadedImages(names, timeout = 60000) {
         const src = img.getAttribute("src") || "";
         return (
           imageLooksReady(img) &&
-          (alt === name || alt.includes(name) || src.includes(encodeURIComponent(name)))
+          (alt === name ||
+            alt.includes(name) ||
+            src.includes(encodeURIComponent(name)))
         );
       }),
     );
@@ -319,7 +336,7 @@ function isVideoTileComplete(tile) {
 
 // ==================== SETUP PAGE ====================
 
-async function setupPage(aspectRatio, modelType, mode) {
+async function setupPage(aspectRatio, modelType, mode, renderCount = "x1") {
   // Đợi login nếu cần
   if (location.href.includes("accounts.google.com")) {
     console.log("⚠️ Cần đăng nhập...");
@@ -384,8 +401,8 @@ async function setupPage(aspectRatio, modelType, mode) {
     await sleep(rnd(1000, 1500));
 
     // Chọn x1
-    await waitForCondition(() => !!findButtonByText("x1"));
-    await realClick(findButtonByText("x1"));
+    await waitForCondition(() => !!findButtonByText("1x"));
+    await realClick(findButtonByText("1x"));
     await sleep(rnd(500, 1000));
   } catch (e) {
     console.log("Setup lỗi nhỏ, tiếp tục:", e.message);
@@ -422,7 +439,9 @@ async function waitForVideos(_expectedCount, log, previousTopSignature = "") {
 
     if (retryBtns.length > 0) {
       stableCount = 0;
-      log(`Phát hiện ${retryBtns.length} video bị lỗi, đang tự động bấm Thử lại...`);
+      log(
+        `Phát hiện ${retryBtns.length} video bị lỗi, đang tự động bấm Thử lại...`,
+      );
       await realClick(retryBtns[0]);
       await sleep(rnd(1500, 3000));
       continue;
@@ -454,7 +473,7 @@ async function waitForVideos(_expectedCount, log, previousTopSignature = "") {
 }
 // ==================== SETUP IMAGE PAGE ====================
 
-async function setupImagePage(aspectRatio, modelType) {
+async function setupImagePage(aspectRatio, modelType, renderCount = "x1") {
   // Đợi login nếu cần
   if (location.href.includes("accounts.google.com")) {
     console.log("⚠️ Cần đăng nhập...");
@@ -512,10 +531,18 @@ async function setupImagePage(aspectRatio, modelType) {
     console.log("✅ Đã chọn Model");
     await sleep(rnd(1000, 2000));
 
-    // Chọn x1
-    await waitForCondition(() => !!findButtonByText("x1"));
-    await realClick(findButtonByText("x1"));
+    // Chọn số lượng x1/x2/x3/x4
+    const targetRenderCount = normalizeRenderCount(renderCount);
+    await waitForCondition(
+      () =>
+        !!findRenderCountButton(targetRenderCount) ||
+        !!findRenderCountButton("x1"),
+    );
+    await realClick(
+      findRenderCountButton(targetRenderCount) || findRenderCountButton("x1"),
+    );
     await sleep(rnd(500, 1000));
+    console.log(`✅ Đã chọn số lượng: ${targetRenderCount}`);
   } catch (e) {
     console.log("Setup lỗi nhỏ, tiếp tục:", e.message);
   }
@@ -591,17 +618,19 @@ async function waitForImages(expectedCount, log, tilesBefore = 0) {
 
 async function runTextToVideo(params, log) {
   const { aspectRatio, modelType, promptList, batchSize } = params;
-  await setupPage(aspectRatio, modelType, "Khung hình");
+  const renderCount = normalizeRenderCount(params.renderCount);
+  await setupPage(aspectRatio, modelType, "Khung hình", renderCount);
   blockEditNavigation();
 
-  const effectiveBatchSize = resolveBatchSize(promptList.length, batchSize ?? 4);
+  const effectiveBatchSize = resolveBatchSize(
+    promptList.length,
+    batchSize ?? 4,
+  );
   for (let i = 0; i < promptList.length; i += effectiveBatchSize) {
     const batch = promptList.slice(i, i + effectiveBatchSize);
     const groupNumber = Math.floor(i / effectiveBatchSize) + 1;
     const previousTopSignature = getTileSignature(getTopVisibleIndexedItem());
-    log(
-      `📦 Đang xử lý nhóm ${groupNumber} (${batch.length} prompts)`,
-    );
+    log(`📦 Đang xử lý nhóm ${groupNumber} (${batch.length} prompts)`);
 
     for (const prompt of batch) {
       const textbox = await waitFor('[role="textbox"]');
@@ -646,7 +675,8 @@ async function runTextToVideo(params, log) {
 
 async function runImageToVideo(params, log, serverUrl) {
   const { aspectRatio, modelType, tasks, batchSize } = params;
-  await setupPage(aspectRatio, modelType, "Khung hình");
+  const renderCount = normalizeRenderCount(params.renderCount);
+  await setupPage(aspectRatio, modelType, "Khung hình", renderCount);
   blockEditNavigation();
 
   async function selectImage(buttonText, fileName) {
@@ -684,9 +714,7 @@ async function runImageToVideo(params, log, serverUrl) {
     const batch = tasks.slice(i, i + effectiveBatchSize);
     const groupNumber = Math.floor(i / effectiveBatchSize) + 1;
     const previousTopSignature = getTileSignature(getTopVisibleIndexedItem());
-    log(
-      `📦 Đang xử lý nhóm ${groupNumber} (${batch.length} image tasks)`,
-    );
+    log(`📦 Đang xử lý nhóm ${groupNumber} (${batch.length} image tasks)`);
 
     for (const task of batch) {
       log(`🖼️ Submit: ${task.prompt.substring(0, 40)}...`);
@@ -737,17 +765,19 @@ async function runImageToVideo(params, log, serverUrl) {
 
 async function runTextToImage(params, log) {
   const { aspectRatio, modelType, promptList, batchSize } = params;
-  await setupImagePage(aspectRatio, modelType);
+  const renderCount = normalizeRenderCount(params.renderCount);
+  await setupImagePage(aspectRatio, modelType, renderCount);
   blockEditNavigation();
 
-  const effectiveBatchSize = resolveBatchSize(promptList.length, batchSize ?? 4);
+  const effectiveBatchSize = resolveBatchSize(
+    promptList.length,
+    batchSize ?? 4,
+  );
   for (let i = 0; i < promptList.length; i += effectiveBatchSize) {
     const batch = promptList.slice(i, i + effectiveBatchSize);
     const groupNumber = Math.floor(i / effectiveBatchSize) + 1;
     const tilesBefore = getImageTileCount();
-    log(
-      `📦 Đang xử lý nhóm ảnh ${groupNumber} (${batch.length} prompts)`,
-    );
+    log(`📦 Đang xử lý nhóm ảnh ${groupNumber} (${batch.length} prompts)`);
 
     for (const prompt of batch) {
       const textbox = await waitFor('[role="textbox"]');
@@ -792,7 +822,8 @@ async function runTextToImage(params, log) {
 
 async function runIngredientsToVideo(params, log, serverUrl) {
   const { aspectRatio, modelType, ingredients } = params;
-  await setupPage(aspectRatio, modelType, "Thành phần");
+  const renderCount = normalizeRenderCount(params.renderCount);
+  await setupPage(aspectRatio, modelType, "Thành phần", renderCount);
   blockEditNavigation();
 
   // Picker button: button có span "Tạo" nhưng KHÔNG có <i> (khác submit)
@@ -815,17 +846,12 @@ async function runIngredientsToVideo(params, log, serverUrl) {
     await sleep(rnd(400, 700));
 
     // Đợi ô search xuất hiện rồi mới gõ
-    const searchInput = await waitFor(
-      'input[type="text"][placeholder="Tìm kiếm các thành phần"]',
-      10000,
-    );
+    const searchInput = await waitFor('input[placeholder*="Tìm kiếm"]', 10000);
 
     // Focus + clear, sau đó gõ bằng CDP để React nhận keyboard events và trigger filter
-    await realClick(searchInput);
+    searchInput.click();
     await sleep(200);
-    setNativeInputValue(searchInput, "");
-    await sleep(100);
-    await humanType(searchInput, name);
+    setNativeInputValue(searchInput, name);
     await sleep(rnd(500, 900));
 
     // Đợi ảnh khớp tên xuất hiện sau khi filter
