@@ -605,14 +605,14 @@ async function runTextToVideo(params, log) {
 
     for (const prompt of batch) {
       const textbox = await waitFor('[role="textbox"]');
-      await humanPause([600, 1500], {
-        microPauseChance: 0.25,
-        microPauseRange: [250, 700],
+      await humanPause([1500, 3200], {
+        microPauseChance: 0.3,
+        microPauseRange: [500, 1200],
       });
       await humanType(textbox, prompt);
-      await humanPause([1200, 2800], {
+      await humanPause([1500, 3200], {
         microPauseChance: 0.3,
-        microPauseRange: [400, 1200],
+        microPauseRange: [500, 1200],
       });
 
       const createBtn =
@@ -625,17 +625,17 @@ async function runTextToVideo(params, log) {
 
       if (createBtn) await realClick(createBtn);
       log(`✅ Đã gửi prompt: ${prompt.substring(0, 30)}...`);
-      await humanPause([5000, 12000], {
+      await humanPause([6000, 13000], {
         microPauseChance: 0.35,
-        microPauseRange: [800, 2200],
+        microPauseRange: [800, 2000],
         longPauseChance: 0.18,
-        longPauseRange: [12000, 25000],
+        longPauseRange: [12000, 24000],
       });
     }
 
     await waitForVideos(batch.length, log, previousTopSignature);
     log(`🚀 Đã hoàn thành nhóm ${groupNumber}`);
-    await humanPause([6000, 14000], {
+    await humanPause([7000, 15000], {
       microPauseChance: 0.25,
       microPauseRange: [1000, 2500],
       longPauseChance: 0.12,
@@ -751,14 +751,14 @@ async function runTextToImage(params, log) {
 
     for (const prompt of batch) {
       const textbox = await waitFor('[role="textbox"]');
-      await humanPause([600, 1500], {
-        microPauseChance: 0.25,
-        microPauseRange: [250, 700],
+      await humanPause([1500, 3200], {
+        microPauseChance: 0.3,
+        microPauseRange: [500, 1200],
       });
       await humanType(textbox, prompt);
-      await humanPause([1200, 2500], {
+      await humanPause([1500, 3200], {
         microPauseChance: 0.3,
-        microPauseRange: [400, 1000],
+        microPauseRange: [500, 1200],
       });
 
       const createBtn =
@@ -771,21 +771,21 @@ async function runTextToImage(params, log) {
 
       if (createBtn) await realClick(createBtn);
       log(`✅ Đã gửi prompt: ${prompt.substring(0, 30)}...`);
-      await humanPause([4000, 9000], {
-        microPauseChance: 0.3,
-        microPauseRange: [700, 1800],
-        longPauseChance: 0.15,
-        longPauseRange: [10000, 18000],
+      await humanPause([6000, 13000], {
+        microPauseChance: 0.35,
+        microPauseRange: [800, 2000],
+        longPauseChance: 0.18,
+        longPauseRange: [12000, 24000],
       });
     }
 
     await waitForImages(batch.length, log, tilesBefore);
     log(`🚀 Đã hoàn thành nhóm ảnh ${groupNumber}`);
-    await humanPause([5000, 11000], {
+    await humanPause([7000, 15000], {
       microPauseChance: 0.25,
-      microPauseRange: [800, 2000],
-      longPauseChance: 0.1,
-      longPauseRange: [12000, 22000],
+      microPauseRange: [1000, 2500],
+      longPauseChance: 0.12,
+      longPauseRange: [15000, 30000],
     });
   }
 }
@@ -863,7 +863,7 @@ async function runIngredientsToVideo(params, log, serverUrl) {
     const textbox = await waitFor('[role="textbox"]');
     await humanType(textbox, item.prompt);
     await humanPause([1500, 3200], {
-      microPauseChance: 0.25,
+      microPauseChance: 0.3,
       microPauseRange: [500, 1200],
     });
 
@@ -880,9 +880,9 @@ async function runIngredientsToVideo(params, log, serverUrl) {
     await waitForVideos(1, log, previousTopSignature);
     log(`🚀 Xong item ${i + 1}`);
     await humanPause([6000, 13000], {
-      microPauseChance: 0.25,
-      microPauseRange: [800, 1800],
-      longPauseChance: 0.12,
+      microPauseChance: 0.35,
+      microPauseRange: [800, 2000],
+      longPauseChance: 0.18,
       longPauseRange: [12000, 24000],
     });
   }
