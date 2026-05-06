@@ -85,18 +85,31 @@ function setupTaskStream() {
       await postLog(`🤖 [${agentId}] Nhận task #${id}: ${type}`);
 
       await new Promise((resolve, reject) => {
-        chrome.runtime.sendMessage(
-          { action: "run-task", taskId: id, type, params, serverUrl: SERVER },
-          (res) => {
-            if (chrome.runtime.lastError) {
-              reject(new Error(chrome.runtime.lastError.message));
-            } else if (res?.error) {
-              reject(new Error(res.error));
-            } else {
-              resolve();
-            }
-          },
-        );
+        const port = chrome.runtime.connect({ name: "agent-runner" });
+        let settled = false;
+
+        port.onMessage.addListener((res) => {
+          if (settled) return;
+          settled = true;
+          port.disconnect();
+
+          if (res?.error) reject(new Error(res.error));
+          else resolve();
+        });
+
+        port.onDisconnect.addListener(() => {
+          if (settled) return;
+          settled = true;
+          reject(new Error(chrome.runtime.lastError?.message || "Agent runner disconnected"));
+        });
+
+        port.postMessage({
+          action: "run-task",
+          taskId: id,
+          type,
+          params,
+          serverUrl: SERVER,
+        });
       });
 
       await fetch(`${SERVER}/api/agent/finish/${id}`, {

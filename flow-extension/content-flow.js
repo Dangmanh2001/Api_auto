@@ -3,6 +3,35 @@
 const rnd = (min, max) => Math.floor(Math.random() * (max - min + 1) + min);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+function keepPageActive() {
+  try {
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      get: () => "visible",
+    });
+    Object.defineProperty(document, "hidden", {
+      configurable: true,
+      get: () => false,
+    });
+
+    const originalAddEventListener = EventTarget.prototype.addEventListener;
+    EventTarget.prototype.addEventListener = function (type, ...args) {
+      if (
+        type === "visibilitychange" ||
+        type === "freeze" ||
+        type === "resume"
+      ) {
+        return undefined;
+      }
+      return originalAddEventListener.call(this, type, ...args);
+    };
+  } catch (err) {
+    console.warn("keepPageActive failed:", err.message);
+  }
+}
+
+keepPageActive();
+
 function randomChance(probability) {
   return Math.random() < probability;
 }
@@ -201,19 +230,95 @@ async function humanType(_element, text) {
 async function uploadFromServer(serverUrl, filenames, fileInput) {
   const dt = new DataTransfer();
   for (const name of filenames) {
-    const url = `${serverUrl}/uploads/${encodeURIComponent(name)}`;
-    const result = await new Promise((resolve, reject) => {
-      chrome.runtime.sendMessage({ action: "fetch-file", url }, (res) => {
-        if (res?.error) reject(new Error(res.error));
-        else resolve(res);
-      });
-    });
-    const bytes = new Uint8Array(result.data);
-    const blob = new Blob([bytes], { type: result.mime });
-    dt.items.add(new File([blob], name, { type: result.mime }));
+    dt.items.add(await getServerFile(serverUrl, name));
   }
   fileInput.files = dt.files;
   fileInput.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+async function getServerFile(serverUrl, name) {
+  const url = `${serverUrl}/uploads/${encodeURIComponent(name)}`;
+  const result = await new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage({ action: "fetch-file", url }, (res) => {
+      if (res?.error) reject(new Error(res.error));
+      else resolve(res);
+    });
+  });
+  const bytes = new Uint8Array(result.data);
+  const blob = new Blob([bytes], { type: result.mime });
+  return new File([blob], name, { type: result.mime });
+}
+
+async function getImageFileFromElement(img, name) {
+  const src = img?.currentSrc || img?.src || img?.getAttribute("src") || "";
+  if (!src) throw new Error("Không lấy được src ảnh vừa render");
+
+  const response = await fetch(src);
+  if (!response.ok) {
+    throw new Error(`Không tải được ảnh vừa render: ${response.status}`);
+  }
+
+  const blob = await response.blob();
+  return new File([blob], name, { type: blob.type || "image/png" });
+}
+
+function getLatestImageTile() {
+  const items = getIndexedItems();
+  for (let i = items.length - 1; i >= 0; i -= 1) {
+    const img = items[i].el.querySelector("img");
+    if (imageLooksReady(img)) return { tile: items[i].el, img };
+  }
+  return null;
+}
+
+async function uploadReferenceFiles(files) {
+  const fileInput = await waitFor('input[type="file"]', 30000);
+  const dt = new DataTransfer();
+  files.forEach((file) => dt.items.add(file));
+  fileInput.files = dt.files;
+  fileInput.dispatchEvent(new Event("change", { bubbles: true }));
+  await sleep(rnd(2000, 4000));
+}
+
+function findPickerBtn() {
+  return [...document.querySelectorAll("button")].find(
+    (b) =>
+      [...b.querySelectorAll("span")].some(
+        (s) => s.textContent?.trim() === "Tạo",
+      ) && b.querySelector("i")?.textContent?.trim() !== "arrow_forward",
+  );
+}
+
+async function selectImageFromPicker(name, log) {
+  await waitForCondition(() => !!findPickerBtn(), 15000);
+  await realClick(findPickerBtn());
+  log(`Đã click picker Tạo`);
+  await sleep(rnd(400, 700));
+
+  const searchInput = await waitFor('input[placeholder*="Tìm kiếm"]', 10000);
+  searchInput.click();
+  await sleep(200);
+  setNativeInputValue(searchInput, name);
+  await sleep(rnd(500, 900));
+
+  await waitForCondition(
+    () =>
+      [...document.querySelectorAll("img")].some((img) => {
+        const alt = img.getAttribute("alt") || "";
+        return alt === name || alt.includes(name);
+      }),
+    15000,
+  );
+
+  const img = [...document.querySelectorAll("img")].find((node) => {
+    const alt = node.getAttribute("alt") || "";
+    return alt === name || alt.includes(name);
+  });
+
+  if (!img) throw new Error(`Không tìm thấy ảnh trong picker: ${name}`);
+  await realClick(img);
+  log(`Đã chọn ảnh tham chiếu: ${name}`);
+  await sleep(rnd(800, 1200));
 }
 
 // Click và verify state (giống clickAndVerify trong Puppeteer)
@@ -531,16 +636,9 @@ async function setupImagePage(aspectRatio, modelType, renderCount = "x1") {
     console.log("✅ Đã chọn Model");
     await sleep(rnd(1000, 2000));
 
-    // Chọn số lượng x1/x2/x3/x4
-    const targetRenderCount = normalizeRenderCount(renderCount);
-    await waitForCondition(
-      () =>
-        !!findRenderCountButton(targetRenderCount) ||
-        !!findRenderCountButton("x1"),
-    );
-    await realClick(
-      findRenderCountButton(targetRenderCount) || findRenderCountButton("x1"),
-    );
+    // Chọn x1
+    await waitForCondition(() => !!findButtonByText("1x"));
+    await realClick(findButtonByText("1x"));
     await sleep(rnd(500, 1000));
     console.log(`✅ Đã chọn số lượng: ${targetRenderCount}`);
   } catch (e) {
@@ -820,54 +918,84 @@ async function runTextToImage(params, log) {
   }
 }
 
+async function runTimeslapImage(params, log, serverUrl) {
+  const { aspectRatio, modelType, prompt, initialImageName } = params;
+  const imageCount = Math.min(Number(params.imageCount || 1), 10);
+  const renderCount = "x1";
+
+  if (!initialImageName) throw new Error("Thiếu ảnh 1 cho timeslap");
+  if (!prompt) throw new Error("Thiếu prompt timeslap");
+
+  await setupImagePage(aspectRatio, modelType, renderCount);
+  blockEditNavigation();
+
+  const referenceFiles = [await getServerFile(serverUrl, initialImageName)];
+  log(`🖼️ Đã nạp ảnh 1: ${initialImageName}`);
+
+  for (let nextIndex = 2; nextIndex <= imageCount; nextIndex += 1) {
+    const tilesBefore = getImageTileCount();
+    log(
+      `📦 Render ảnh ${nextIndex}/${imageCount} với ${referenceFiles.length} ảnh tham chiếu`,
+    );
+
+    await uploadReferenceFiles(referenceFiles);
+    await waitForUploadedImages(
+      referenceFiles.map((file) => file.name),
+      60000,
+    );
+
+    for (const file of referenceFiles) {
+      await selectImageFromPicker(file.name, log);
+    }
+
+    const textbox = await waitFor('[role="textbox"]');
+    await humanPause([1000, 2200], {
+      microPauseChance: 0.25,
+      microPauseRange: [300, 900],
+    });
+    await humanType(textbox, prompt);
+
+    const createBtn =
+      [...document.querySelectorAll("button")].find(
+        (b) => b.querySelector("i")?.textContent?.trim() === "arrow_forward",
+      ) ||
+      [...document.querySelectorAll("button")].find(
+        (b) => b.textContent?.trim() === "Tạo",
+      );
+
+    if (!createBtn) throw new Error("Không tìm thấy nút tạo ảnh");
+    await realClick(createBtn);
+
+    await waitForImages(1, log, tilesBefore);
+
+    const latest = getLatestImageTile();
+    if (!latest?.img) {
+      throw new Error(`Không lấy được ảnh ${nextIndex} sau khi render`);
+    }
+
+    const generatedFile = await getImageFileFromElement(
+      latest.img,
+      `timeslap-${nextIndex}.png`,
+    );
+    referenceFiles.push(generatedFile);
+    log(
+      `✅ Đã lấy ảnh ${nextIndex}, tổng ảnh tham chiếu: ${referenceFiles.length}`,
+    );
+
+    await humanPause([3000, 7000], {
+      microPauseChance: 0.2,
+      microPauseRange: [500, 1500],
+    });
+  }
+
+  log(`🚀 Timeslap hoàn thành: ${referenceFiles.length}/${imageCount} ảnh`);
+}
+
 async function runIngredientsToVideo(params, log, serverUrl) {
   const { aspectRatio, modelType, ingredients } = params;
   const renderCount = normalizeRenderCount(params.renderCount);
   await setupPage(aspectRatio, modelType, "Thành phần", renderCount);
   blockEditNavigation();
-
-  // Picker button: button có span "Tạo" nhưng KHÔNG có <i> (khác submit)
-  // Submit button: button có cả <i>arrow_forward</i> và <span>Tạo</span>
-  // Picker: button có bất kỳ span nào text="Tạo" và KHÔNG có <i>arrow_forward</i>
-  // (giống XPath Puppeteer: //button[.//span[text()='Tạo']])
-  function findPickerBtn() {
-    return [...document.querySelectorAll("button")].find(
-      (b) =>
-        [...b.querySelectorAll("span")].some(
-          (s) => s.textContent?.trim() === "Tạo",
-        ) && b.querySelector("i")?.textContent?.trim() !== "arrow_forward",
-    );
-  }
-
-  async function selectImageForSlot(name) {
-    await waitForCondition(() => !!findPickerBtn(), 15000);
-    await realClick(findPickerBtn());
-    log(`Đã click picker Tạo`);
-    await sleep(rnd(400, 700));
-
-    // Đợi ô search xuất hiện rồi mới gõ
-    const searchInput = await waitFor('input[placeholder*="Tìm kiếm"]', 10000);
-
-    // Focus + clear, sau đó gõ bằng CDP để React nhận keyboard events và trigger filter
-    searchInput.click();
-    await sleep(200);
-    setNativeInputValue(searchInput, name);
-    await sleep(rnd(500, 900));
-
-    // Đợi ảnh khớp tên xuất hiện sau khi filter
-    await waitForCondition(
-      () =>
-        [...document.querySelectorAll("img")].some((img) => img.alt === name),
-      15000,
-    );
-    const img = [...document.querySelectorAll("img")].find(
-      (img) => img.alt === name,
-    );
-    if (!img) throw new Error(`Không tìm thấy ảnh: ${name}`);
-    await realClick(img);
-    log(`Đã chọn: ${name}`);
-    await sleep(rnd(800, 1200));
-  }
 
   for (let i = 0; i < ingredients.length; i++) {
     const item = ingredients[i];
@@ -882,7 +1010,7 @@ async function runIngredientsToVideo(params, log, serverUrl) {
 
     // Chọn từng ảnh vào slot ingredient
     for (const name of item.imageNames) {
-      await selectImageForSlot(name);
+      await selectImageFromPicker(name, log);
     }
 
     // Type prompt
@@ -917,6 +1045,13 @@ async function runIngredientsToVideo(params, log, serverUrl) {
 // ==================== PORT LISTENER ====================
 let _currentTabId = null;
 
+chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  if (msg.action === "flow-ping") {
+    sendResponse({ ok: true });
+    return true;
+  }
+});
+
 chrome.runtime.onConnect.addListener((port) => {
   if (port.name !== "flow-task") return;
 
@@ -942,6 +1077,8 @@ chrome.runtime.onConnect.addListener((port) => {
       else if (type === "ingredients-to-video")
         await runIngredientsToVideo(params, log, serverUrl);
       else if (type === "text-to-image") await runTextToImage(params, log);
+      else if (type === "timeslap-image")
+        await runTimeslapImage(params, log, serverUrl);
       else throw new Error(`Không biết task type: ${type}`);
 
       port.postMessage({ type: "done" });

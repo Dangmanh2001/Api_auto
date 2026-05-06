@@ -5,7 +5,7 @@ const DEFAULT_PROMPT =
 
 module.exports = {
   IngredientsToVideo: async (req, res) => {
-    res.render("IngredientsToVideo.ejs");
+    res.render("IngredientsToVideo.ejs", { defaultPrompt: DEFAULT_PROMPT });
   },
 
   IngredientsToVideoPost: async (req, res) => {
@@ -14,6 +14,7 @@ module.exports = {
       const modelType = req.body.modelType;
       const renderCount = req.body.renderCount || "x1";
       const agentId = req.agentId || req.body.agentId || null;
+      const defaultPrompt = (req.body.defaultPrompt || "").trim() || DEFAULT_PROMPT;
 
       const prompts = req.body.prompts;
       const promptList = Array.isArray(prompts) ? prompts : [prompts];
@@ -24,12 +25,12 @@ module.exports = {
         const imageNames = allFiles
           .filter((file) => file.fieldname === fieldName)
           .map((file) => file.originalname);
-        return { prompt: (prompt || "").trim() || DEFAULT_PROMPT, imageNames };
+        return { prompt: (prompt || "").trim() || defaultPrompt, imageNames };
       });
 
       taskQueue.create(
         "ingredients-to-video",
-        { aspectRatio, modelType, renderCount, ingredients },
+        { aspectRatio, modelType, renderCount, defaultPrompt, ingredients },
         agentId,
       );
       return res.redirect("/api/IngredientsToVideo");

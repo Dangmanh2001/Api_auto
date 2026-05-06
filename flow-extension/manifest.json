@@ -21,7 +21,7 @@
     {
       "matches": ["https://labs.google/fx/vi/tools/flow*"],
       "js": ["content-flow.js"],
-      "run_at": "document_idle"
+      "run_at": "document_start"
     }
   ]
 }

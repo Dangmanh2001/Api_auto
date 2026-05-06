@@ -6,7 +6,7 @@ const DEFAULT_PROMPT =
 
 module.exports = {
   ImageToVideo: async (req, res) => {
-    res.render("ImageToVideo.ejs");
+    res.render("ImageToVideo.ejs", { defaultPrompt: DEFAULT_PROMPT });
   },
 
   ImageToVideoPost: async (req, res) => {
@@ -16,6 +16,7 @@ module.exports = {
       const aspectRatio = req.body.aspectRatio;
       const modelType = req.body.modelType;
       const renderCount = req.body.renderCount || "x1";
+      const defaultPrompt = (req.body.defaultPrompt || "").trim() || DEFAULT_PROMPT;
 
       // Map files theo index: start_images[0], end_images[0], start_images[1], ...
       const fileMap = {};
@@ -34,7 +35,7 @@ module.exports = {
         const promptRaw = Array.isArray(promptsRaw)
           ? promptsRaw[i]
           : promptsRaw[String(i)];
-        const prompt = (promptRaw || "").trim() || DEFAULT_PROMPT;
+        const prompt = (promptRaw || "").trim() || defaultPrompt;
         const endFile = fileMap[`end_images[${i}]`];
         tasks.push({
           id: i + 1,
@@ -59,7 +60,7 @@ module.exports = {
 
       taskQueue.create(
         "image-to-video",
-        { aspectRatio, modelType, renderCount, tasks: taskPayload },
+        { aspectRatio, modelType, renderCount, defaultPrompt, tasks: taskPayload },
         agentId,
       );
       return res.redirect("/api/imageToVideo");

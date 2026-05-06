@@ -158,6 +158,33 @@
         outline: none;
       }
 
+      .default-prompt-panel {
+        margin: 18px 0;
+        padding: 16px;
+        border: 1px solid var(--border-color);
+        border-radius: 14px;
+        background: rgba(77, 148, 255, 0.06);
+      }
+
+      .default-prompt-panel label {
+        display: block;
+        margin-bottom: 8px;
+        color: var(--text-main);
+        font-size: 13px;
+        font-weight: 600;
+      }
+
+      .default-prompt-panel small {
+        display: block;
+        margin-top: 8px;
+        color: var(--text-dim);
+        font-size: 12px;
+      }
+
+      .default-prompt-box {
+        min-height: 86px;
+      }
+
       /* Nút thêm Ingredient */
       .btn-add-wrapper {
         border: 1px dashed var(--border-color);
@@ -535,6 +562,7 @@
         >
         <a href="/api/clone-channel">Clone YouTube</a>
         <a href="/api/textToImage">Text To Image</a>
+        <a href="/api/timeslapImage">Timeslap Image</a>
       </nav>
 
       <form
@@ -662,6 +690,18 @@
           </div>
         </div>
         <!-- ===== END DROP ZONE ===== -->
+
+        <div class="default-prompt-panel">
+          <label for="defaultPrompt">Prompt mặc định</label>
+          <textarea
+            id="defaultPrompt"
+            name="defaultPrompt"
+            class="prompt-box default-prompt-box"
+            rows="4"
+            placeholder="<%= defaultPrompt || '' %>"
+          ></textarea>
+          <small>Bỏ trống để dùng prompt mặc định cũ. Nhập nội dung mới để thay thế prompt mặc định cho các ingredient không có prompt riêng.</small>
+        </div>
 
         <div id="ingredientList">
           <div class="ingredient-card">

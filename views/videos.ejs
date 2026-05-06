@@ -178,6 +178,8 @@
             promptPreview = task.params.tasks[0].prompt;
           } else if (task.type === 'ingredients-to-video' && task.params.ingredients?.length) {
             promptPreview = task.params.ingredients[0].prompt;
+          } else if ((task.type === 'text-to-image' || task.type === 'timeslap-image') && task.params.promptList?.length) {
+            promptPreview = task.params.promptList[0];
           }
         %>
         <% if (promptPreview) { %>

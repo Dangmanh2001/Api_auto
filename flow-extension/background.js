@@ -18,6 +18,22 @@ async function attachDebugger(tabId) {
   attachedTabs.add(tabId);
 }
 
+async function keepTabActive(tabId) {
+  await attachDebugger(tabId);
+
+  await chrome.debugger
+    .sendCommand({ tabId }, "Emulation.setFocusEmulationEnabled", {
+      enabled: true,
+    })
+    .catch(() => {});
+
+  await chrome.debugger
+    .sendCommand({ tabId }, "Page.setWebLifecycleState", {
+      state: "active",
+    })
+    .catch(() => {});
+}
+
 async function detachDebugger(tabId) {
   if (!attachedTabs.has(tabId)) return;
   await chrome.debugger.detach({ tabId }).catch(() => {});
@@ -113,6 +129,18 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   }
 });
 
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name !== "agent-runner") return;
+
+  port.onMessage.addListener((msg) => {
+    if (msg.action !== "run-task") return;
+
+    runTask(msg)
+      .then(() => port.postMessage({ ok: true }))
+      .catch((err) => port.postMessage({ error: err.message }));
+  });
+});
+
 // Cleanup debugger khi tab đóng
 chrome.tabs.onRemoved.addListener((tabId) => {
   detachDebugger(tabId);
@@ -126,13 +154,14 @@ async function runTask({ taskId, type, params, serverUrl }) {
   );
   const tab = await chrome.tabs.create({
     url: "https://labs.google/fx/vi/tools/flow",
-    active: false,
+    active: true,
   });
 
   await waitForTabReady(tab.id);
+  await ensureFlowContentScript(tab.id);
 
   // Attach debugger sớm để tab không bị Chrome throttle khi ở background
-  await attachDebugger(tab.id);
+  await keepTabActive(tab.id);
 
   return new Promise((resolve, reject) => {
     const port = chrome.tabs.connect(tab.id, { name: "flow-task" });
@@ -168,6 +197,41 @@ async function runTask({ taskId, type, params, serverUrl }) {
       tabId: tab.id,
     });
   });
+}
+
+async function ensureFlowContentScript(tabId, timeout = 120000) {
+  const start = Date.now();
+  let injected = false;
+
+  while (Date.now() - start < timeout) {
+    const tab = await chrome.tabs.get(tabId);
+    const url = tab.url || "";
+
+    if (!url.startsWith("https://labs.google/fx/vi/tools/flow")) {
+      await sleep(1000);
+      continue;
+    }
+
+    const pong = await chrome.tabs
+      .sendMessage(tabId, { action: "flow-ping" })
+      .catch(() => null);
+
+    if (pong?.ok) return;
+
+    if (!injected) {
+      await chrome.scripting
+        .executeScript({
+          target: { tabId },
+          files: ["content-flow.js"],
+        })
+        .catch(() => {});
+      injected = true;
+    }
+
+    await sleep(1000);
+  }
+
+  throw new Error("Flow content script is not ready. Check login/page URL and reload the extension.");
 }
 
 async function waitForTabReady(tabId, timeout = 60000) {
