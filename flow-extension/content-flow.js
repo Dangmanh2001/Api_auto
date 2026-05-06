@@ -283,12 +283,31 @@ async function getImageFileFromElement(img, name) {
 }
 
 function getLatestImageTile() {
-  const items = getIndexedItems();
-  for (let i = items.length - 1; i >= 0; i -= 1) {
-    const img = items[i].el.querySelector("img");
-    if (imageLooksReady(img)) return { tile: items[i].el, img };
+  const topTile = getTopVisibleIndexedItem();
+  if (topTile && isImageTileComplete(topTile)) {
+    const img = topTile.querySelector("img");
+    if (img) return { tile: topTile, img };
   }
   return null;
+}
+
+function isImageTileComplete(tile) {
+  if (!tile) return false;
+  if (
+    tile.querySelector(
+      '[class*="generating"], [class*="spinner"], [aria-busy="true"]',
+    )
+  ) {
+    return false;
+  }
+  if (hasProgressText(tile)) return false;
+  if (hasRetryButton(tile)) return false;
+  const img = tile.querySelector("img");
+  return imageLooksReady(img);
+}
+
+function getImageTileCount() {
+  return getIndexedItemCount();
 }
 
 async function uploadReferenceFiles(files) {
@@ -669,6 +688,62 @@ async function setupImagePage(aspectRatio, modelType, renderCount = "x1") {
 }
 
 // ==================== WAIT FOR IMAGES ====================
+async function waitForImages(_expectedCount, log, previousTopSignature = "") {
+  let stableCount = 0;
+  const STABLE_NEEDED = 3;
+  const TIMEOUT_MS = 10 * 60 * 1000;
+  const startTime = Date.now();
+
+  log("Chờ ảnh mới hoàn thành...");
+
+  while (true) {
+    await sleep(rnd(2500, 5000));
+
+    if (Date.now() - startTime > TIMEOUT_MS) {
+      log("⏰ Timeout 10 phút — bỏ qua");
+      break;
+    }
+
+    const retryBtns = [...document.querySelectorAll("button")].filter((b) => {
+      const btnText = b.textContent || "";
+      return (
+        btnText.includes("Thử lại") ||
+        b.querySelector("i")?.textContent?.trim() === "refresh"
+      );
+    });
+
+    if (retryBtns.length > 0) {
+      stableCount = 0;
+      log(`⚠️ Phát hiện ${retryBtns.length} ảnh lỗi, đang Thử lại...`);
+      await realClick(retryBtns[0]);
+      await sleep(rnd(1500, 3000));
+      continue;
+    }
+
+    const topTile = getTopVisibleIndexedItem();
+    if (!topTile) {
+      stableCount = 0;
+      continue;
+    }
+
+    const currentTopSignature = getTileSignature(topTile);
+    if (previousTopSignature && currentTopSignature === previousTopSignature) {
+      stableCount = 0;
+      continue;
+    }
+
+    if (!isImageTileComplete(topTile)) {
+      stableCount = 0;
+      continue;
+    }
+
+    stableCount++;
+    if (stableCount >= STABLE_NEEDED) {
+      log("✅ Render ảnh xong!");
+      break;
+    }
+  }
+}
 
 // ==================== TASK RUNNERS ====================
 
@@ -832,7 +907,7 @@ async function runTextToImage(params, log) {
   for (let i = 0; i < promptList.length; i += effectiveBatchSize) {
     const batch = promptList.slice(i, i + effectiveBatchSize);
     const groupNumber = Math.floor(i / effectiveBatchSize) + 1;
-    const tilesBefore = getImageTileCount();
+    const previousTopSignature = getTileSignature(getTopVisibleIndexedItem());
     log(`📦 Đang xử lý nhóm ảnh ${groupNumber} (${batch.length} prompts)`);
 
     for (const prompt of batch) {
@@ -865,7 +940,7 @@ async function runTextToImage(params, log) {
       });
     }
 
-    await waitForImages(batch.length, log, tilesBefore);
+    await waitForImages(batch.length, log, previousTopSignature);
     log(`🚀 Đã hoàn thành nhóm ảnh ${groupNumber}`);
     await humanPause([7000, 15000], {
       microPauseChance: 0.25,
@@ -892,13 +967,10 @@ async function runTimeslapImage(params, log, serverUrl) {
   log(`🖼️ Đã nạp ảnh 1: ${initialImageName}`);
 
   for (let nextIndex = 2; nextIndex <= imageCount; nextIndex += 1) {
-    const tilesBefore = getImageTileCount();
+    const previousTopSignature = getTileSignature(getTopVisibleIndexedItem());
 
-    // Xác định batch ảnh tham chiếu: Bước 2 dùng [1], Bước 3 dùng [1, 2], Bước 4 dùng [2, 3]...
-    const currentBatch =
-      nextIndex === 2
-        ? [referenceFiles[0]]
-        : [referenceFiles[nextIndex - 3], referenceFiles[nextIndex - 2]];
+    // Logic chaining: Mỗi bước chỉ sử dụng duy nhất 1 ảnh vừa tạo ở bước trước đó làm tham chiếu
+    const currentBatch = [referenceFiles[nextIndex - 2]];
 
     log(
       `📦 Render ảnh ${nextIndex}/${imageCount} với ${currentBatch.length} ảnh tham chiếu`,
@@ -939,7 +1011,10 @@ async function runTimeslapImage(params, log, serverUrl) {
     if (!createBtn) throw new Error("Không tìm thấy nút tạo ảnh");
     await realClick(createBtn);
 
-    await waitForImages(1, log, tilesBefore);
+    // Thêm một khoảng dừng nhỏ để đảm bảo DOM cập nhật hoàn toàn sau khi nhấn "Tạo"
+    await humanPause([1000, 2000]);
+
+    await waitForImages(1, log, previousTopSignature);
 
     const latest = getLatestImageTile();
     if (!latest?.img) {
@@ -1036,11 +1111,20 @@ chrome.runtime.onConnect.addListener((port) => {
 
     const log = (text) => {
       console.log(text);
-      fetch(`${serverUrl}/api/agent/log/${taskId}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ msg: text }),
-      }).catch(() => {});
+      chrome.runtime.sendMessage(
+        {
+          action: "proxy-request",
+          url: `${serverUrl}/api/agent/log/${taskId}`,
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ msg: text }),
+        },
+        () => {
+          if (chrome.runtime.lastError) {
+            /* Bỏ qua lỗi kết nối nếu extension chưa sẵn sàng */
+          }
+        },
+      );
     };
 
     try {
