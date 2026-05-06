@@ -2,52 +2,49 @@
 <html lang="vi">
   <head>
     <meta charset="UTF-8" />
-    <title>Timeslap Image</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Google Flow - Tạo ảnh Timeslap</title>
     <link
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20,400,0,0"
     />
     <style>
       :root {
-        --bg-dark: #151719;
-        --card-bg: #20242a;
-        --panel-bg: #15181d;
-        --border-color: #3d444f;
-        --text-main: #f2f4f8;
-        --text-dim: #9aa4b2;
+        --bg-dark: #1a1c1e;
+        --card-bg: #212429;
+        --border-color: #3f444c;
+        --text-main: #e2e2e2;
+        --text-dim: #9aa0a6;
         --accent-blue: #4d94ff;
-        --accent-amber: #f4b860;
-        --accent-green: #81c995;
       }
 
       body {
-        min-height: 100vh;
-        margin: 0;
-        background:
-          radial-gradient(circle at 15% 10%, rgba(244, 184, 96, 0.18), transparent 30%),
-          radial-gradient(circle at 85% 20%, rgba(77, 148, 255, 0.15), transparent 28%),
-          linear-gradient(135deg, #111316, #1b2028 55%, #121417);
+        background-color: var(--bg-dark);
         color: var(--text-main);
-        font-family: "Segoe UI", Roboto, Arial, sans-serif;
+        font-family: "Segoe UI", Roboto, sans-serif;
+        padding: 40px;
+        display: flex;
+        justify-content: center;
+        box-sizing: border-box;
       }
 
-      .page {
-        max-width: 980px;
-        margin: 0 auto;
-        padding: 36px 20px 60px;
+      .container {
+        max-width: 850px;
+        width: 100%;
       }
 
       nav {
+        width: 100%;
         display: flex;
         align-items: center;
         gap: 8px;
-        margin-bottom: 34px;
+        margin-bottom: 40px;
         flex-wrap: wrap;
       }
 
       .nav-brand {
         font-size: 18px;
-        font-weight: 700;
+        font-weight: bold;
         color: white;
         text-decoration: none;
         margin-right: 16px;
@@ -58,8 +55,9 @@
         color: var(--text-dim);
         font-size: 14px;
         padding: 6px 12px;
-        border-radius: 999px;
+        border-radius: 20px;
         border: 1px solid transparent;
+        transition: all 0.2s;
       }
 
       nav a:hover {
@@ -68,446 +66,457 @@
       }
 
       nav a.active {
-        color: var(--accent-amber);
-        border-color: var(--accent-amber);
+        color: var(--accent-blue);
+        border-color: var(--accent-blue);
       }
 
-      .hero {
-        margin-bottom: 22px;
+      .section-title {
+        margin-bottom: 20px;
+        font-size: 18px;
+        font-weight: 500;
+        padding-left: 10px;
       }
 
-      .hero h1 {
-        margin: 0 0 8px;
-        font-size: 34px;
-        letter-spacing: -0.04em;
-      }
-
-      .hero p {
-        margin: 0;
-        color: var(--text-dim);
-        line-height: 1.6;
-      }
-
-      form {
-        background: rgba(32, 36, 42, 0.92);
+      .config-panel {
+        background-color: var(--card-bg);
         border: 1px solid var(--border-color);
-        border-radius: 22px;
-        padding: 26px;
-        box-shadow: 0 24px 70px rgba(0, 0, 0, 0.35);
+        border-radius: 16px;
+        padding: 24px;
+        display: flex;
+        flex-direction: column;
+        gap: 25px;
       }
 
-      .grid {
-        display: grid;
-        grid-template-columns: 1.1fr 0.9fr;
+      .main-layout {
+        display: flex;
+        gap: 25px;
+        align-items: flex-start;
+      }
+
+      .image-upload-box {
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        width: 200px;
+      }
+
+      .image-upload-box span {
+        font-size: 13px;
+        color: var(--text-dim);
+        font-weight: 500;
+      }
+
+      .thumbnail-preview {
+        width: 100%;
+        aspect-ratio: 16/9;
+        border-radius: 12px;
+        object-fit: cover;
+        border: 2px dashed var(--border-color);
+        background: #131517;
+        cursor: pointer;
+        transition: border-color 0.2s;
+      }
+
+      .thumbnail-preview:hover {
+        border-color: var(--accent-blue);
+      }
+
+      .form-content {
+        flex-grow: 1;
+        display: flex;
+        flex-direction: column;
         gap: 20px;
       }
 
-      .form-group {
-        margin-bottom: 18px;
+      .input-group {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
       }
 
-      label {
-        display: block;
-        margin-bottom: 10px;
-        color: var(--text-dim);
+      .input-group label {
         font-size: 13px;
+        color: var(--text-dim);
         font-weight: 600;
       }
 
-      textarea,
-      input[type="text"] {
-        width: 100%;
-        box-sizing: border-box;
-        background: var(--panel-bg);
+      .custom-input,
+      .custom-textarea {
+        background: #131517;
         border: 1px solid var(--border-color);
-        border-radius: 14px;
+        border-radius: 8px;
+        padding: 12px;
         color: #fff;
-        padding: 14px;
         font-size: 14px;
-        line-height: 1.5;
         outline: none;
+        font-family: inherit;
       }
 
-      textarea {
+      .custom-textarea {
+        height: 100px;
         resize: vertical;
       }
 
-      textarea:focus,
-      input[type="text"]:focus {
-        border-color: var(--accent-amber);
+      .custom-input:focus,
+      .custom-textarea:focus {
+        border-color: var(--accent-blue);
       }
 
-      .image-dropzone {
-        position: relative;
-        display: grid;
-        grid-template-columns: 96px 1fr;
-        gap: 16px;
-        align-items: center;
-        min-height: 132px;
-        padding: 16px;
-        border: 1px dashed rgba(244, 184, 96, 0.55);
-        border-radius: 18px;
-        background:
-          linear-gradient(135deg, rgba(244, 184, 96, 0.11), rgba(77, 148, 255, 0.06)),
-          var(--panel-bg);
-        cursor: pointer;
-        transition: border-color 0.2s ease, transform 0.2s ease, background 0.2s ease;
+      .custom-textarea.drag-over {
+        border: 2px dashed var(--accent-blue) !important;
+        background: rgba(77, 148, 255, 0.05);
       }
 
-      .image-dropzone:hover,
-      .image-dropzone.drag-over {
-        border-color: var(--accent-amber);
-        transform: translateY(-1px);
-        background:
-          linear-gradient(135deg, rgba(244, 184, 96, 0.18), rgba(77, 148, 255, 0.08)),
-          var(--panel-bg);
+      .image-upload-box.drag-over .thumbnail-preview {
+        border-color: var(--accent-blue);
+        background: rgba(77, 148, 255, 0.1);
       }
 
-      .image-dropzone input[type="file"] {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        opacity: 0;
-        pointer-events: none;
-      }
-
-      .image-preview {
-        width: 96px;
-        height: 96px;
-        border-radius: 16px;
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        background: rgba(0, 0, 0, 0.22);
-        display: grid;
-        place-items: center;
-        overflow: hidden;
-      }
-
-      .image-preview img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-        display: none;
-      }
-
-      .image-preview.has-image img {
-        display: block;
-      }
-
-      .image-preview.has-image .material-symbols-outlined {
-        display: none;
-      }
-
-      .image-preview .material-symbols-outlined {
-        color: var(--accent-amber);
-        font-size: 34px;
-      }
-
-      .image-drop-title {
-        margin: 0 0 6px;
-        color: var(--text-main);
-        font-weight: 700;
-      }
-
-      .image-drop-meta {
-        margin: 0;
-        color: var(--text-dim);
-        font-size: 13px;
-        line-height: 1.5;
-      }
-
-      .image-actions {
+      .prompt-header {
         display: flex;
-        gap: 8px;
-        margin-top: 12px;
-        flex-wrap: wrap;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2px;
       }
 
-      .image-action-btn {
-        border: 1px solid rgba(244, 184, 96, 0.45);
-        background: rgba(244, 184, 96, 0.09);
-        color: var(--accent-amber);
-        padding: 7px 11px;
-        border-radius: 999px;
-        font-size: 12px;
-        font-weight: 700;
+      .btn-import-txt {
+        background: none;
+        border: 1px solid var(--border-color);
+        color: var(--text-dim);
+        padding: 3px 10px;
+        border-radius: 6px;
+        font-size: 11px;
         cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        transition: all 0.2s;
       }
 
-      .image-action-btn.secondary {
-        border-color: var(--border-color);
-        background: rgba(255, 255, 255, 0.04);
-        color: var(--text-dim);
+      .btn-import-txt:hover {
+        background: #2a2e34;
+        color: var(--text-main);
+        border-color: var(--accent-blue);
       }
 
-      small {
-        display: block;
-        margin-top: 8px;
-        color: var(--text-dim);
-        font-size: 12px;
-      }
-
-      .settings-row {
+      .settings-grid {
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 14px;
-        margin-top: 10px;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 20px;
+        border-top: 1px solid var(--border-color);
+        padding-top: 20px;
+      }
+
+      .select-wrapper {
+        position: relative;
       }
 
       .custom-select {
         width: 100%;
         appearance: none;
-        background: var(--panel-bg);
+        background-color: #131517;
         color: var(--text-main);
         border: 1px solid var(--border-color);
-        border-radius: 12px;
-        padding: 12px;
+        border-radius: 8px;
+        padding: 10px 30px 10px 12px;
         font-size: 14px;
-        outline: none;
-      }
-
-      .preview-card {
-        border: 1px solid rgba(244, 184, 96, 0.35);
-        background: linear-gradient(160deg, rgba(244, 184, 96, 0.1), rgba(77, 148, 255, 0.07));
-        border-radius: 18px;
-        padding: 18px;
-        min-height: 240px;
-      }
-
-      .preview-card h2 {
-        margin: 0 0 12px;
-        font-size: 17px;
-      }
-
-      .preview-list {
-        display: grid;
-        gap: 10px;
-        margin: 0;
-        padding: 0;
-        list-style: none;
-      }
-
-      .preview-list li {
-        padding: 10px 12px;
-        border-radius: 12px;
-        background: rgba(0, 0, 0, 0.22);
-        color: var(--text-dim);
-        font-size: 13px;
-      }
-
-      .footer {
-        display: flex;
-        justify-content: flex-end;
-        margin-top: 22px;
-      }
-
-      button[type="submit"] {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        padding: 12px 22px;
-        border: 0;
-        border-radius: 999px;
-        background: var(--accent-amber);
-        color: #151515;
-        font-weight: 700;
         cursor: pointer;
       }
 
-      @media (max-width: 820px) {
-        .grid,
-        .settings-row {
-          grid-template-columns: 1fr;
+      .select-wrapper::after {
+        content: "expand_more";
+        font-family: "Material Symbols Outlined";
+        position: absolute;
+        right: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--text-dim);
+        pointer-events: none;
+      }
+
+      .footer {
+        margin-top: 30px;
+        display: flex;
+        justify-content: flex-end;
+      }
+
+      .btn-submit {
+        background: var(--accent-blue);
+        color: white;
+        border: none;
+        padding: 12px 30px;
+        border-radius: 30px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-weight: 600;
+        transition: transform 0.1s;
+      }
+
+      .btn-submit:active {
+        transform: scale(0.98);
+      }
+
+      @media (max-width: 640px) {
+        .main-layout {
+          flex-direction: column;
+        }
+        .image-upload-box {
+          width: 100%;
         }
       }
     </style>
   </head>
   <body>
-    <div class="page">
-      <nav>
-        <a class="nav-brand">API Tool</a>
-        <a href="/">Home</a>
-        <a href="/api">Text To Video</a>
-        <a href="/api/gemini">Gemini</a>
-        <a href="/api/imageToVideo">Image To Video</a>
-        <a href="/api/IngredientsToVideo">Ingredients To Video</a>
-        <a href="/api/textToImage">Text To Image</a>
+    <div id="page-root">
+      <div class="container">
+        <nav>
+      <a class="nav-brand">API Tool</a>
+      <a href="/">Home</a>
+      <a href="/api">Text To Video</a>
+      <a href="/api/gemini">Gemini</a>
+      <a href="/api/imageToVideo">Image To Video</a>
+      <a href="/api/IngredientsToVideo">Ingredients To Video</a>
+      <a href="/api/clone-channel">Clone YouTube</a>
+      <a href="/api/textToImage">Text To Image</a>
         <a href="/api/timeslapImage" class="active">Timeslap Image</a>
-        <a href="/api/clone-channel">Clone YouTube</a>
-      </nav>
+        </nav>
 
-      <section class="hero">
-        <h1>Timeslap Image</h1>
-        <p>Nhap 1 cau lenh cho 1 case anh. He thong se tao toi da <%= maxImages %> anh theo cung case do.</p>
-      </section>
+        <div class="section-title">Cấu hình render Timeslap</div>
 
-      <form id="timeslapForm" action="/api/timeslapImage" method="POST" enctype="multipart/form-data">
-        <div class="grid">
-          <div>
-            <div class="form-group">
-              <label for="initialImage">Anh 1</label>
-              <div class="image-dropzone" id="imageDropzone">
-                <input id="initialImage" name="initialImage" type="file" accept="image/*" required />
-                <div class="image-preview" id="imagePreview">
-                  <span class="material-symbols-outlined">add_photo_alternate</span>
-                  <img id="imagePreviewImg" alt="Anh 1 preview" />
-                </div>
-                <div>
-                  <p class="image-drop-title" id="imageDropTitle">Keo tha anh vao day</p>
-                  <p class="image-drop-meta" id="imageDropMeta">
-                    Hoac click de chon anh 1. Ho tro JPG, PNG, WEBP.
-                  </p>
-                  <div class="image-actions">
-                    <button type="button" class="image-action-btn" id="pickImageBtn">Chon anh</button>
-                    <button type="button" class="image-action-btn secondary" id="clearImageBtn">Xoa anh</button>
+        <form
+          id="timeslapForm"
+          action="/api/timeslapImage"
+          method="POST"
+          enctype="multipart/form-data"
+        >
+          <div class="config-panel">
+            <div class="main-layout">
+              <div class="image-upload-box">
+                <span>Ảnh gốc (Ảnh 1)</span>
+                <img
+                  id="imgPreview"
+                    src="https://cdn-media.sforum.vn/storage/app/media/ctvseo_maihue/hinh-nen-1920-1080/hinh-nen-1920-1080-thumbnail.jpg"
+                  class="thumbnail-preview"
+                  onclick="document.getElementById('fileInput').click()"
+                />
+                <input
+                  type="file"
+                  id="fileInput"
+                  name="initialImage"
+                  accept="image/*"
+                  style="display: none"
+                  onchange="previewImage(this)"
+                />
+              </div>
+
+              <div class="form-content">
+                <div class="input-group">
+                  <div class="prompt-header">
+                    <label for="prompt">Câu lệnh (Prompt)</label>
+                    <button type="button" class="btn-import-txt" onclick="document.getElementById('promptFileInput').click()">
+                      <span class="material-symbols-outlined" style="font-size: 16px;">upload_file</span>
+                      Import .txt
+                    </button>
                   </div>
+                  <input type="file" id="promptFileInput" accept=".txt" style="display: none" />
+                  <textarea
+                    id="prompt"
+                    name="prompt"
+                    class="custom-textarea"
+                    placeholder="Continue this same landscape as a time-lapse sequence, keep the same camera angle and location, advance the time naturally, cinematic realistic detail (Mỗi dòng là 1 prompt tiếp theo)..."
+                  ></textarea>
+                </div>
+
+                <div class="input-group">
+                  <label for="imageCount"
+                    >Số lượng ảnh muốn tạo (Tổng cộng)</label
+                  >
+                  <input
+                    type="number"
+                    id="imageCount"
+                    name="imageCount"
+                    class="custom-input"
+                    value="5"
+                    min="2"
+                    required
+                  />
                 </div>
               </div>
-              <small>Day la anh goc dau tien. Agent se dung anh nay de render anh 2.</small>
             </div>
 
-            <div class="form-group">
-              <label for="prompt">Cau lenh / Prompt cho 1 case anh</label>
-              <textarea
-                id="prompt"
-                name="prompt"
-                rows="8"
-                placeholder="Vi du: Continue this same landscape as a time-lapse sequence, keep the same camera angle and location, advance the time naturally, cinematic realistic detail"
-                required
-              ></textarea>
-              <small>Mot prompt duy nhat se duoc dung lap lai: anh 1 -> anh 2, anh 1+2 -> anh 3, ... den so luong da chon.</small>
+            <div class="settings-grid">
+              <div class="input-group">
+                <label>Tỉ lệ khung hình:</label>
+                <div class="select-wrapper">
+                  <select name="aspectRatio" class="custom-select">
+                    <option value="16:9" selected>16:9 (Ngang)</option>
+                    <option value="4:3">4:3</option>
+                    <option value="1:1">1:1 (Vuông)</option>
+                    <option value="3:4">3:4</option>
+                    <option value="9:16">9:16 (Dọc)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="input-group">
+                <label>Model:</label>
+                <div class="select-wrapper">
+                  <select name="modelType" class="custom-select">
+                    <% if (typeof imageModels !== 'undefined') { %>
+                      <% imageModels.forEach(model => { %>
+                        <option value="<%= model %>"><%= model %></option>
+                      <% }); %>
+                    <% } %>
+                  </select>
+                </div>
+              </div>
             </div>
           </div>
 
-          <aside class="preview-card">
-            <h2>Gioi han</h2>
-            <ul class="preview-list">
-              <li>Bat dau tu anh 1 ban upload.</li>
-              <li>Tong so anh toi da: <%= maxImages %> bao gom anh 1.</li>
-              <li>Neu chon 10 anh, agent se render them 9 anh moi.</li>
-            </ul>
-          </aside>
-        </div>
-
-        <div class="settings-row">
-          <div>
-            <label>So luong anh</label>
-            <select name="imageCount" class="custom-select">
-              <% for (let i = 1; i <= maxImages; i++) { %>
-                <option value="<%= i %>" <%= i === 5 ? 'selected' : '' %>><%= i %> anh</option>
-              <% } %>
-            </select>
+          <div class="footer">
+            <button type="submit" class="btn-submit">
+              Bắt đầu tạo
+              <span class="material-symbols-outlined">bolt</span>
+            </button>
           </div>
-
-          <div>
-            <label>Ti le khung hinh</label>
-            <select name="aspectRatio" class="custom-select">
-              <option value="16:9" selected>Ngang</option>
-              <option value="9:16">Doc</option>
-              <option value="1:1">Vuong</option>
-            </select>
-          </div>
-
-          <div>
-            <label>Model</label>
-            <select name="modelType" class="custom-select">
-              <option value="Nano Banana Pro" selected>Nano Banana Pro</option>
-              <option value="Nano Banana 2">Nano Banana 2</option>
-              <option value="Imagen 4">Imagen 4</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="footer">
-          <button type="submit">
-            <span class="material-symbols-outlined">auto_awesome_motion</span>
-            Tao Timeslap
-          </button>
-        </div>
-      </form>
+        </form>
+      </div>
     </div>
+
     <script>
-      const form = document.getElementById("timeslapForm");
-      const dropzone = document.getElementById("imageDropzone");
-      const fileInput = document.getElementById("initialImage");
-      const preview = document.getElementById("imagePreview");
-      const previewImg = document.getElementById("imagePreviewImg");
-      const title = document.getElementById("imageDropTitle");
-      const meta = document.getElementById("imageDropMeta");
-      const pickBtn = document.getElementById("pickImageBtn");
-      const clearBtn = document.getElementById("clearImageBtn");
-
-      function formatSize(bytes) {
-        if (!bytes) return "0 KB";
-        const mb = bytes / (1024 * 1024);
-        if (mb >= 1) return `${mb.toFixed(2)} MB`;
-        return `${Math.ceil(bytes / 1024)} KB`;
+      function previewImage(input) {
+        if (input.files && input.files[0]) {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            document.getElementById("imgPreview").src = e.target.result;
+          };
+          reader.readAsDataURL(input.files[0]);
+        }
       }
 
-      function setSelectedFile(file) {
-        if (!file || !file.type.startsWith("image/")) {
-          alert("Vui long chon file anh hop le.");
-          return;
+    // Xử lý kéo thả ảnh vào khu vực upload
+    const imageUploadBox = document.querySelector(".image-upload-box");
+    
+    imageUploadBox.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      imageUploadBox.classList.add("drag-over");
+    });
+
+    imageUploadBox.addEventListener("dragleave", () => {
+      imageUploadBox.classList.remove("drag-over");
+    });
+
+    imageUploadBox.addEventListener("drop", (e) => {
+      e.preventDefault();
+      imageUploadBox.classList.remove("drag-over");
+
+      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+        const file = e.dataTransfer.files[0];
+        if (file.type.startsWith("image/")) {
+          const fileInput = document.getElementById("fileInput");
+          fileInput.files = e.dataTransfer.files;
+          previewImage(fileInput);
         }
-
-        const dt = new DataTransfer();
-        dt.items.add(file);
-        fileInput.files = dt.files;
-
-        preview.classList.add("has-image");
-        previewImg.src = URL.createObjectURL(file);
-        title.textContent = file.name;
-        meta.textContent = `${formatSize(file.size)} | Anh 1 da san sang`;
       }
+    });
 
-      function clearSelectedFile() {
-        fileInput.value = "";
-        preview.classList.remove("has-image");
-        previewImg.removeAttribute("src");
-        title.textContent = "Keo tha anh vao day";
-        meta.textContent = "Hoac click de chon anh 1. Ho tro JPG, PNG, WEBP.";
+    // Xử lý kéo thả file .txt vào ô Prompt
+    const promptArea = document.getElementById("prompt");
+    const imageCountInput = document.getElementById("imageCount");
+
+    // Hàm tự động cập nhật số lượng ảnh dựa trên số dòng prompt
+    function updateCountFromPrompt() {
+      const text = promptArea.value.trim();
+      console.log("DEBUG: Raw promptArea.value:", JSON.stringify(promptArea.value)); // Log nội dung thô của textarea
+      console.log("DEBUG: Trimmed promptArea.value:", JSON.stringify(text)); // Log nội dung đã trim
+
+      if (!text) {
+        console.log("DEBUG: Prompt area is empty after trim, returning.");
+        return;
       }
+      
+      // Sử dụng regex bao quát hơn: \r\n (Windows), \n (Unix), \r (Mac cũ)
+      const lines = text.split(/\r\n|\r|\n/).map(l => l.trim()).filter(l => l !== "");
+      console.log("DEBUG: Split and filtered lines:", lines); // Log mảng các dòng đã được xử lý
+      if (lines.length > 0) {
+        // Tổng số ảnh (bao gồm cả ảnh gốc) sẽ khớp với số lượng dòng lệnh đã nhập
+        imageCountInput.value = Math.max(2, lines.length);
+        console.log("DEBUG: Calculated imageCountInput.value:", imageCountInput.value);
+      }
+    }
 
-      dropzone.addEventListener("click", () => fileInput.click());
-      pickBtn.addEventListener("click", (event) => {
-        event.stopPropagation();
-        fileInput.click();
-      });
-      clearBtn.addEventListener("click", (event) => {
-        event.stopPropagation();
-        clearSelectedFile();
-      });
+    promptArea.addEventListener("input", updateCountFromPrompt);
 
-      fileInput.addEventListener("change", () => {
-        setSelectedFile(fileInput.files[0]);
-      });
+    // Xử lý khi chọn file từ nút Import
+    document.getElementById('promptFileInput').addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          promptArea.value = event.target.result;
+          updateCountFromPrompt();
+          console.log("✅ Đã import file .txt thành công");
+        };
+        reader.readAsText(file);
+      }
+      this.value = ''; // Reset để có thể chọn lại cùng 1 file nếu cần
+    });
 
-      dropzone.addEventListener("dragover", (event) => {
-        event.preventDefault();
-        dropzone.classList.add("drag-over");
-      });
+    promptArea.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      promptArea.classList.add("drag-over");
+    });
 
-      ["dragleave", "drop"].forEach((type) => {
-        dropzone.addEventListener(type, () => dropzone.classList.remove("drag-over"));
-      });
+    promptArea.addEventListener("dragleave", () => {
+      promptArea.classList.remove("drag-over");
+    });
 
-      dropzone.addEventListener("drop", (event) => {
-        event.preventDefault();
-        setSelectedFile(event.dataTransfer.files[0]);
-      });
+    promptArea.addEventListener("drop", (e) => {
+      e.preventDefault();
+      promptArea.classList.remove("drag-over");
 
-      form.addEventListener("submit", (event) => {
-        const count = Number(document.querySelector('[name="imageCount"]').value || 1);
-        if (!Number.isInteger(count) || count < 1 || count > <%= maxImages %>) {
-          event.preventDefault();
-          alert("So luong anh phai tu 1 den <%= maxImages %>.");
-          return;
-        }
+      const file = e.dataTransfer.files[0];
+      if (file && (file.type === "text/plain" || file.name.endsWith(".txt"))) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          promptArea.value = event.target.result;
+          updateCountFromPrompt();
+        };
+        reader.readAsText(file);
+      }
+    });
 
-        if (!fileInput.files.length) {
-          event.preventDefault();
-          alert("Vui long chon anh 1.");
-        }
-      });
+  // Validation trước khi submit form
+  document.getElementById("timeslapForm").addEventListener("submit", function (e) {
+    const fileInput = document.getElementById('fileInput');
+
+    // 1. Kiểm tra đã chọn ảnh gốc hay chưa
+    if (!fileInput.files || fileInput.files.length === 0) {
+      e.preventDefault();
+      alert("Vui lòng chọn ảnh gốc (Ảnh 1) trước khi bắt đầu tạo Timeslap.");
+      return;
+    }
+
+    const textForValidation = promptArea.value.trim();
+    console.log("DEBUG (Validation): Raw promptArea.value:", JSON.stringify(promptArea.value));
+    console.log("DEBUG (Validation): Trimmed promptArea.value:", JSON.stringify(textForValidation));
+
+    if (!textForValidation) return; // Nếu để trống thì dùng logic mặc định ở server
+
+    const lines = textForValidation.split(/\r\n|\r|\n/).map(l => l.trim()).filter(l => l !== "");
+    console.log("DEBUG (Validation): Split and filtered lines:", lines);
+    const count = parseInt(imageCountInput.value);
+
+    // Tổng số ảnh phải tối thiểu bằng số lượng dòng lệnh đã nhập
+    if (count < lines.length) {
+      e.preventDefault();
+      alert(`Số lượng ảnh (${count}) không phù hợp với số dòng lệnh (${lines.length} dòng). \nBạn cần đặt số lượng ảnh ít nhất là ${lines.length} để khớp với danh sách câu lệnh.`);
+    }
+  });
     </script>
+    <script src="/javascripts/spa.js"></script>
   </body>
 </html>

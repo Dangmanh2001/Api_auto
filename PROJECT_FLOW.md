@@ -232,7 +232,7 @@ CHROME CLIENT
 ## 8. Lưu ý quan trọng
 
 - TaskQueue lưu trong bộ nhớ, reset khi restart server
-- Uploads chỉ lưu tạm, tự xóa sau 2 ngày
+- Uploads chỉ lưu tạm, tự xóa sau 1 ngày
 - Mỗi agent chỉ xử lý 1 task tại một thời điểm
 - Dùng CDP để gõ text cho React trên Google Flow
 - Dùng click/typing giống người để giảm lỗi anti-bot

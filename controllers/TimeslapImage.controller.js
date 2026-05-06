@@ -1,30 +1,50 @@
 const taskQueue = require("../utils/taskQueue");
 
-const MAX_IMAGES = 10;
+const imageModels = ["🍌 Nano Banana Pro", "🍌 Nano Banana 2", "Imagen 4"];
+
+const DEFAULT_PROMPT =
+  "Continue this same landscape as a time-lapse sequence, keep the same camera angle and location, advance the time naturally, cinematic realistic detail";
 
 function normalizeImageCount(value) {
   const count = Number.parseInt(value, 10);
   if (!Number.isInteger(count) || count < 1) return 1;
-  return Math.min(count, MAX_IMAGES);
+  return count;
 }
 
-function buildPromptList(prompt, imageCount) {
-  return Array.from({ length: Math.max(0, imageCount - 1) }, (_unused, index) =>
-    [
-      `Create timeslap image ${index + 2}/${imageCount}.`,
-      prompt,
-      "Use all provided reference images as continuity. Keep the same subject, location and composition. Advance the scene one natural step forward.",
-    ]
-      .join(" ")
-      .replace(/\s+/g, " ")
-      .trim(),
+function buildPromptList(promptInput, imageCount) {
+  // Tách các dòng, loại bỏ khoảng trắng dư thừa và dòng trống
+  const lines = promptInput
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l !== "");
+  const isSinglePrompt = lines.length === 1;
+  const isEmpty = lines.length === 0;
+
+  return Array.from(
+    { length: Math.max(0, imageCount - 1) },
+    (_unused, index) => {
+      // Xác định prompt cho bước hiện tại
+      const currentLine = isEmpty
+        ? DEFAULT_PROMPT
+        : isSinglePrompt
+          ? lines[0]
+          : lines[index] || DEFAULT_PROMPT;
+
+      return [
+        currentLine,
+        "Use all provided reference images as continuity. Keep the same subject, location and composition. Advance the scene one natural step forward.",
+      ]
+        .join(" ")
+        .replace(/\s+/g, " ")
+        .trim();
+    },
   );
 }
 
 module.exports = {
   getPage: (_req, res) => {
     res.render("TimeslapImage", {
-      maxImages: MAX_IMAGES,
+      imageModels,
       error: null,
     });
   },
@@ -36,15 +56,9 @@ module.exports = {
       const renderCount = "x1";
       const agentId = req.agentId || req.body.agentId || null;
 
-      const prompt = String(req.body.prompt || "").trim();
+      const promptInput = String(req.body.prompt || "").trim();
       const imageCount = normalizeImageCount(req.body.imageCount);
       const initialImageName = req.file ? req.file.filename : "";
-
-      if (!prompt) {
-        return res.send(
-          `<script>alert("Vui lòng nhập câu lệnh/prompt cho case ảnh."); window.history.back();</script>`,
-        );
-      }
 
       if (!initialImageName) {
         return res.send(
@@ -52,7 +66,7 @@ module.exports = {
         );
       }
 
-      const promptList = buildPromptList(prompt, imageCount);
+      const promptList = buildPromptList(promptInput, imageCount);
 
       taskQueue.create(
         "timeslap-image",
@@ -60,9 +74,8 @@ module.exports = {
           aspectRatio,
           modelType,
           renderCount,
-          prompt,
+          prompt: promptInput || DEFAULT_PROMPT,
           imageCount,
-          maxImages: MAX_IMAGES,
           initialImageName,
           promptList,
         },
@@ -72,7 +85,9 @@ module.exports = {
       return res.redirect("/api/timeslapImage");
     } catch (error) {
       console.error("Timeslap image task error:", error.message);
-      return res.send(`<script>alert("Lỗi hệ thống: ${error.message}"); window.history.back();</script>`);
+      return res.send(
+        `<script>alert("Lỗi hệ thống: ${error.message}"); window.history.back();</script>`,
+      );
     }
   },
 };

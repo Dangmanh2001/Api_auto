@@ -121,6 +121,21 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     return true;
   }
 
+  if (msg.action === "proxy-request") {
+    const { url, method, headers, body } = msg;
+    fetch(url, {
+      method: method || "GET",
+      headers: headers || {},
+      body: body,
+    })
+      .then(async (r) => {
+        const data = await r.text();
+        sendResponse({ ok: r.ok, data });
+      })
+      .catch((err) => sendResponse({ error: err.message }));
+    return true;
+  }
+
   if (msg.action === "run-task") {
     runTask(msg)
       .then(sendResponse)
@@ -231,7 +246,9 @@ async function ensureFlowContentScript(tabId, timeout = 120000) {
     await sleep(1000);
   }
 
-  throw new Error("Flow content script is not ready. Check login/page URL and reload the extension.");
+  throw new Error(
+    "Flow content script is not ready. Check login/page URL and reload the extension.",
+  );
 }
 
 async function waitForTabReady(tabId, timeout = 60000) {

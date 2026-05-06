@@ -1,4 +1,4 @@
-﻿// content-flow.js - chạy trên https://labs.google/fx/vi/tools/flow
+﻿﻿// content-flow.js - chạy trên https://labs.google/fx/vi/tools/flow
 
 const rnd = (min, max) => Math.floor(Math.random() * (max - min + 1) + min);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -100,21 +100,26 @@ async function waitForCondition(fn, timeout = 60000) {
 async function realClick(el) {
   if (!el) return;
   el.scrollIntoView({ block: "center", behavior: "smooth" });
-  await sleep(rnd(200, 400));
+  await sleep(rnd(500, 800)); // Đợi scroll hoàn tất
   const rect = el.getBoundingClientRect();
-  const cx = rect.left + rect.width / 2;
-  const cy = rect.top + rect.height / 2;
+  // Click vào vị trí ngẫu nhiên trên nút thay vì chính giữa (giả lập người dùng thật)
+  const cx = rect.left + rect.width * (0.3 + Math.random() * 0.4);
+  const cy = rect.top + rect.height * (0.3 + Math.random() * 0.4);
   const opts = { bubbles: true, cancelable: true, clientX: cx, clientY: cy };
+
   el.dispatchEvent(new PointerEvent("pointerover", opts));
   el.dispatchEvent(new MouseEvent("mouseover", opts));
   el.dispatchEvent(new PointerEvent("pointerenter", opts));
   el.dispatchEvent(new MouseEvent("mouseenter", opts));
+
+  await sleep(rnd(150, 300)); // Hover một chút trước khi nhấn
+
   el.dispatchEvent(new PointerEvent("pointerdown", opts));
   el.dispatchEvent(new MouseEvent("mousedown", { ...opts, button: 0 }));
   el.dispatchEvent(new PointerEvent("pointerup", opts));
   el.dispatchEvent(new MouseEvent("mouseup", { ...opts, button: 0 }));
   el.dispatchEvent(new MouseEvent("click", { ...opts, button: 0 }));
-  await sleep(rnd(100, 300));
+  await sleep(rnd(300, 600));
 }
 
 // Tìm button theo text content chứa
@@ -199,6 +204,21 @@ function getIndexedItemCount() {
     if (Number.isInteger(index)) indexes.add(index);
   }
   return indexes.size;
+}
+
+// Giả lập các hoạt động ngẫu nhiên của người dùng để tránh bị AI phát hiện
+async function simulateHumanActivity() {
+  // Cuộn chuột nhẹ lên xuống
+  window.scrollBy({ top: rnd(-50, 50), behavior: "smooth" });
+  await sleep(rnd(200, 500));
+
+  // Di chuyển chuột ngẫu nhiên (chỉ dispatch event nếu cần, ở đây chủ yếu là delay)
+  const x = rnd(100, window.innerWidth - 100);
+  const y = rnd(100, window.innerHeight - 100);
+  document.dispatchEvent(
+    new MouseEvent("mousemove", { clientX: x, clientY: y, bubbles: true }),
+  );
+  await sleep(rnd(400, 1000));
 }
 
 function resolveBatchSize(total, preferred = 4) {
@@ -640,7 +660,7 @@ async function setupImagePage(aspectRatio, modelType, renderCount = "x1") {
     await waitForCondition(() => !!findButtonByText("1x"));
     await realClick(findButtonByText("1x"));
     await sleep(rnd(500, 1000));
-    console.log(`✅ Đã chọn số lượng: ${targetRenderCount}`);
+    console.log(`✅ Đã chọn số lượng: ${renderCount}`);
   } catch (e) {
     console.log("Setup lỗi nhỏ, tiếp tục:", e.message);
   }
@@ -649,68 +669,6 @@ async function setupImagePage(aspectRatio, modelType, renderCount = "x1") {
 }
 
 // ==================== WAIT FOR IMAGES ====================
-
-function getImageTileCount() {
-  return getIndexedItemCount();
-}
-
-async function waitForImages(expectedCount, log, tilesBefore = 0) {
-  const expectedTiles = tilesBefore + expectedCount;
-  let stableCount = 0;
-  const STABLE_NEEDED = 3;
-  const TIMEOUT_MS = 5 * 60 * 1000;
-  const startTime = Date.now();
-  let lastLogTiles = -1;
-
-  log(`⏳ Chờ render ảnh: ${tilesBefore} → ${expectedTiles} tiles`);
-
-  while (true) {
-    await sleep(rnd(2000, 4000));
-
-    if (Date.now() - startTime > TIMEOUT_MS) {
-      log("⏰ Timeout 5 phút — bỏ qua");
-      break;
-    }
-
-    const currentTiles = getImageTileCount();
-    if (currentTiles !== lastLogTiles) {
-      log(`📊 Tiles: ${currentTiles}/${expectedTiles}`);
-      lastLogTiles = currentTiles;
-    }
-
-    // Bấm Thử lại nếu có
-    const retryBtns = [...document.querySelectorAll("button")].filter(
-      (b) =>
-        b.textContent?.includes("Thử lại") ||
-        b.querySelector("i")?.textContent?.trim() === "refresh",
-    );
-    if (retryBtns.length > 0) {
-      stableCount = 0;
-      log(`⚠️ Phát hiện ${retryBtns.length} ảnh lỗi, đang Thử lại...`);
-      await realClick(retryBtns[0]);
-      await sleep(rnd(1500, 3000));
-      continue;
-    }
-
-    const isLoading =
-      !!document.querySelector(
-        '[class*="generating"], [class*="spinner"], [aria-busy="true"]',
-      ) ||
-      [...document.querySelectorAll("*")]
-        .filter((el) => el.childElementCount === 0 && el.textContent)
-        .some((el) => /^\d+%$/.test(el.textContent.trim()));
-
-    if (isLoading) {
-      stableCount = 0;
-    } else {
-      stableCount++;
-      if (stableCount >= STABLE_NEEDED && currentTiles >= expectedTiles) {
-        log("✅ Render ảnh xong!");
-        break;
-      }
-    }
-  }
-}
 
 // ==================== TASK RUNNERS ====================
 
@@ -919,12 +877,13 @@ async function runTextToImage(params, log) {
 }
 
 async function runTimeslapImage(params, log, serverUrl) {
-  const { aspectRatio, modelType, prompt, initialImageName } = params;
-  const imageCount = Math.min(Number(params.imageCount || 1), 10);
+  const { aspectRatio, modelType, initialImageName, imageCount, promptList } =
+    params;
   const renderCount = "x1";
 
   if (!initialImageName) throw new Error("Thiếu ảnh 1 cho timeslap");
-  if (!prompt) throw new Error("Thiếu prompt timeslap");
+  if (!promptList || promptList.length === 0)
+    throw new Error("Thiếu danh sách prompt timeslap");
 
   await setupImagePage(aspectRatio, modelType, renderCount);
   blockEditNavigation();
@@ -934,26 +893,40 @@ async function runTimeslapImage(params, log, serverUrl) {
 
   for (let nextIndex = 2; nextIndex <= imageCount; nextIndex += 1) {
     const tilesBefore = getImageTileCount();
+
+    // Xác định batch ảnh tham chiếu: Bước 2 dùng [1], Bước 3 dùng [1, 2], Bước 4 dùng [2, 3]...
+    const currentBatch =
+      nextIndex === 2
+        ? [referenceFiles[0]]
+        : [referenceFiles[nextIndex - 3], referenceFiles[nextIndex - 2]];
+
     log(
-      `📦 Render ảnh ${nextIndex}/${imageCount} với ${referenceFiles.length} ảnh tham chiếu`,
+      `📦 Render ảnh ${nextIndex}/${imageCount} với ${currentBatch.length} ảnh tham chiếu`,
     );
 
-    await uploadReferenceFiles(referenceFiles);
+    await uploadReferenceFiles(currentBatch);
     await waitForUploadedImages(
-      referenceFiles.map((file) => file.name),
+      currentBatch.map((file) => file.name),
       60000,
     );
 
-    for (const file of referenceFiles) {
+    for (const file of currentBatch) {
       await selectImageFromPicker(file.name, log);
     }
+
+    await simulateHumanActivity();
 
     const textbox = await waitFor('[role="textbox"]');
     await humanPause([1000, 2200], {
       microPauseChance: 0.25,
       microPauseRange: [300, 900],
     });
-    await humanType(textbox, prompt);
+
+    const stepPrompt = promptList[nextIndex - 2];
+    await humanType(textbox, stepPrompt);
+
+    // "Think time" - Giả lập người dùng kiểm tra lại prompt trước khi nhấn nút
+    await humanPause([1200, 3000]);
 
     const createBtn =
       [...document.querySelectorAll("button")].find(

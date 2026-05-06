@@ -27,9 +27,9 @@ if (!fs.existsSync(uploadDir)) {
   console.log("✓ Thư mục uploads đã được tạo");
 }
 
-// Tự động xóa file uploads cũ hơn 2 ngày
+// Tự động xóa file uploads cũ hơn 1 ngày
 function cleanOldUploads() {
-  const TWO_DAYS = 2 * 24 * 60 * 60 * 1000;
+  const ONE_DAY = 1 * 24 * 60 * 60 * 1000;
   const now = Date.now();
   fs.readdir(uploadDir, (err, files) => {
     if (err) return;
@@ -37,7 +37,7 @@ function cleanOldUploads() {
       const filePath = path.join(uploadDir, file);
       fs.stat(filePath, (err, stat) => {
         if (err || !stat.isFile()) return;
-        if (now - stat.mtimeMs > TWO_DAYS) {
+        if (now - stat.mtimeMs > ONE_DAY) {
           fs.unlink(filePath, () => {
             console.log(`[cleanup] Đã xóa file cũ: ${file}`);
           });

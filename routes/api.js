@@ -8,8 +8,8 @@ const TextToVideoControllers = require("../controllers/TextToVideo.controllers")
 const ImageToVideoController = require("../controllers/ImageToVideo.controller");
 const IngredientsToVideo = require("../controllers/IngredientsToVideo");
 const CloneChannel = require("../controllers/CloneChannel.controller");
+const TimeslapImageController = require("../controllers/TimeslapImage.controller");
 const TextToImage = require("../controllers/TextToImage.controller");
-const TimeslapImage = require("../controllers/TimeslapImage.controller");
 const taskQueue = require("../utils/taskQueue");
 
 // ==================== AGENT PROCESS MANAGER ====================
@@ -134,12 +134,6 @@ function startAgent(profilePath, serverUrl) {
     `--profile-directory=${profileDir}`,
     "--no-first-run",
     "--no-default-browser-check",
-    "--disable-background-timer-throttling",
-    "--disable-backgrounding-occluded-windows",
-    "--disable-renderer-backgrounding",
-    "--disable-background-media-suspend",
-    "--disable-features=CalculateNativeWinOcclusion",
-    "--autoplay-policy=no-user-gesture-required",
     serverUrl,
   ]);
 
@@ -239,15 +233,6 @@ router.post("/gemini", TextToVideoControllers.postGemini);
 router.get("/textToImage", TextToImage.getPage);
 router.post("/textToImage", upload.none(), validateAgent, TextToImage.post);
 
-/* Timeslap Image */
-router.get("/timeslapImage", TimeslapImage.getPage);
-router.post(
-  "/timeslapImage",
-  upload.single("initialImage"),
-  validateAgent,
-  TimeslapImage.post,
-);
-
 /* Clone YouTube Channel */
 router.get("/clone-channel", CloneChannel.getPage);
 router.get("/clone-channel/fetch", CloneChannel.fetchChannel);
@@ -321,6 +306,16 @@ router.post("/agent/finish/:id", (req, res) => {
 router.get("/tasks", (_req, res) => {
   res.json(taskQueue.getAll());
 });
+
+/* Timeslap Image Routes */
+router.get("/timeslapImage", TimeslapImageController.getPage);
+
+router.post(
+  "/timeslapImage",
+  upload.single("initialImage"),
+  validateAgent,
+  TimeslapImageController.post,
+);
 
 // UI xem chi tiết 1 task
 router.get("/task/:id", (req, res) => {
