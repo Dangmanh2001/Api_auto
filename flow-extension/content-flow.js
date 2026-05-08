@@ -582,6 +582,26 @@ function isAnyGenerationInProgress() {
     .some((el) => /^\d+%$/.test(el.textContent.trim()));
 }
 
+async function submitRenderButton(log, promptPreview = "") {
+  await waitForCondition(() => {
+    const btn = findRenderSubmitButton();
+    return (
+      btn &&
+      !btn.disabled &&
+      btn.getAttribute("aria-disabled") !== "true"
+    );
+  }, 15000);
+
+  const submitBtn = findRenderSubmitButton();
+  if (!submitBtn) throw new Error("Không tìm thấy nút Tạo (arrow_forward)");
+
+  await clickWithTrustedFallback(submitBtn);
+  if (log) {
+    const preview = String(promptPreview || "").substring(0, 30);
+    log(`✅ Đã gửi prompt: ${preview}...`);
+  }
+}
+
 function isVideoTileComplete(tile) {
   if (!tile) return false;
   if (
@@ -923,20 +943,7 @@ async function runTextToVideo(params, log) {
         await waitForCondition(() => getVisiblePromptText().length > 0, 5000);
       }
 
-      await waitForCondition(() => {
-        const btn = findRenderSubmitButton();
-        return (
-          btn &&
-          !btn.disabled &&
-          btn.getAttribute("aria-disabled") !== "true"
-        );
-      }, 15000);
-
-      const createBtn = findRenderSubmitButton();
-      if (!createBtn) throw new Error("Không tìm thấy nút Tạo (arrow_forward)");
-
-      await clickWithTrustedFallback(createBtn);
-      log(`✅ Đã gửi prompt: ${prompt.substring(0, 30)}...`);
+      await submitRenderButton(log, prompt);
       await humanPause([6000, 13000], {
         microPauseChance: 0.35,
         microPauseRange: [800, 2000],
@@ -1020,13 +1027,7 @@ async function runImageToVideo(params, log, serverUrl) {
         microPauseRange: [500, 1200],
       });
 
-      const createBtn = [...document.querySelectorAll("button")].find(
-        (b) =>
-          b.textContent?.trim() === "Tạo" ||
-          b.querySelector("span")?.textContent?.trim() === "Tạo",
-      );
-      if (createBtn) await realClick(createBtn);
-      log(`✅ Đã gửi prompt: ${task.prompt.substring(0, 30)}...`);
+      await submitRenderButton(log, task.prompt);
       await humanPause([6000, 13000], {
         microPauseChance: 0.35,
         microPauseRange: [800, 2000],
@@ -1074,20 +1075,7 @@ async function runTextToImage(params, log) {
         microPauseRange: [500, 1200],
       });
 
-      await waitForCondition(() => {
-        const btn = findRenderSubmitButton();
-        return (
-          btn &&
-          !btn.disabled &&
-          btn.getAttribute("aria-disabled") !== "true"
-        );
-      }, 15000);
-
-      const createBtn = findRenderSubmitButton();
-      if (!createBtn) throw new Error("Không tìm thấy nút Tạo (arrow_forward)");
-
-      await clickWithTrustedFallback(createBtn);
-      log(`✅ Đã gửi prompt: ${prompt.substring(0, 30)}...`);
+      await submitRenderButton(log, prompt);
       log("⏳ Chờ ảnh mới hoàn thành...");
       await waitForImages(1, log, previousTopSignature, {
         allowComposerReadyFallback: true,
@@ -1150,16 +1138,7 @@ async function runTimeslapImage(params, log, serverUrl) {
     // "Think time" - Giả lập người dùng kiểm tra lại prompt trước khi nhấn nút
     await humanPause([1200, 3000]);
 
-    const createBtn =
-      [...document.querySelectorAll("button")].find(
-        (b) => b.querySelector("i")?.textContent?.trim() === "arrow_forward",
-      ) ||
-      [...document.querySelectorAll("button")].find(
-        (b) => b.textContent?.trim() === "Tạo",
-      );
-
-    if (!createBtn) throw new Error("Không tìm thấy nút tạo ảnh");
-    await realClick(createBtn);
+    await submitRenderButton(log, stepPrompt);
 
     // Thêm một khoảng dừng nhỏ để đảm bảo DOM cập nhật hoàn toàn sau khi nhấn "Tạo"
     await humanPause([1000, 2000]);
@@ -1219,15 +1198,7 @@ async function runIngredientsToVideo(params, log, serverUrl) {
       microPauseRange: [500, 1200],
     });
 
-    // Submit: button có <i>arrow_forward</i>
-    const submitBtn = [...document.querySelectorAll("button")].find(
-      (b) => b.querySelector("i")?.textContent?.trim() === "arrow_forward",
-    );
-    if (!submitBtn)
-      throw new Error("Không tìm thấy nút submit (arrow_forward)");
-
-    await realClick(submitBtn);
-    log(`✅ Đã gửi ingredient: ${item.prompt.substring(0, 30)}...`);
+    await submitRenderButton(log, item.prompt);
 
     await waitForVideos(1, log, previousTopSignature);
     log(`🚀 Xong item ${i + 1}`);
