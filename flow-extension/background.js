@@ -45,17 +45,75 @@ async function detachDebugger(tabId) {
 async function cdpTypeText(tabId, text) {
   await attachDebugger(tabId);
 
-  // 1. Focus textbox trong main world
-  await chrome.debugger.sendCommand({ tabId }, "Runtime.evaluate", {
-    expression: `
-      const el = document.querySelector('[role="textbox"]');
-      if (el) { el.focus(); el.click(); }
-    `,
-    awaitPromise: false,
-  });
-  await sleep(300);
+  const locateScript = `
+    (() => {
+      const boxes = [...document.querySelectorAll('[role="textbox"]')]
+        .filter((el) => {
+          const r = el.getBoundingClientRect();
+          const style = window.getComputedStyle(el);
+          return (
+            r.width > 0 &&
+            r.height > 0 &&
+            r.bottom > 0 &&
+            style.visibility !== "hidden" &&
+            style.display !== "none" &&
+            el.getAttribute("aria-hidden") !== "true"
+          );
+        })
+        .sort((a, b) => b.getBoundingClientRect().top - a.getBoundingClientRect().top);
+      const el = boxes[0];
+      if (!el) return { ok: false, reason: "textbox-not-found" };
+      const r = el.getBoundingClientRect();
+      return {
+        ok: true,
+        x: Math.floor(r.left + r.width / 2),
+        y: Math.floor(r.top + Math.min(r.height / 2, 24)),
+      };
+    })();
+  `;
 
-  // 2. Ctrl+A để select all
+  const locateResult = await chrome.debugger.sendCommand(
+    { tabId },
+    "Runtime.evaluate",
+    {
+      expression: locateScript,
+      returnByValue: true,
+      awaitPromise: false,
+    },
+  );
+
+  const value = locateResult?.result?.value || {};
+  if (!value.ok) {
+    throw new Error(`cdp-type failed: ${value.reason || "unknown"}`);
+  }
+
+  const x = Number(value.x);
+  const y = Number(value.y);
+
+  await chrome.debugger.sendCommand({ tabId }, "Input.dispatchMouseEvent", {
+    type: "mouseMoved",
+    x,
+    y,
+    button: "none",
+    clickCount: 0,
+  });
+  await sleep(40);
+  await chrome.debugger.sendCommand({ tabId }, "Input.dispatchMouseEvent", {
+    type: "mousePressed",
+    x,
+    y,
+    button: "left",
+    clickCount: 1,
+  });
+  await chrome.debugger.sendCommand({ tabId }, "Input.dispatchMouseEvent", {
+    type: "mouseReleased",
+    x,
+    y,
+    button: "left",
+    clickCount: 1,
+  });
+  await sleep(60);
+
   await chrome.debugger.sendCommand({ tabId }, "Input.dispatchKeyEvent", {
     type: "keyDown",
     modifiers: 2,
@@ -70,9 +128,8 @@ async function cdpTypeText(tabId, text) {
     code: "KeyA",
     windowsVirtualKeyCode: 65,
   });
-  await sleep(80);
+  await sleep(40);
 
-  // 3. Backspace để xóa
   await chrome.debugger.sendCommand({ tabId }, "Input.dispatchKeyEvent", {
     type: "keyDown",
     key: "Backspace",
@@ -85,12 +142,40 @@ async function cdpTypeText(tabId, text) {
     code: "Backspace",
     windowsVirtualKeyCode: 8,
   });
-  await sleep(100);
+  await sleep(40);
 
-  // 4. Gõ text — Input.insertText trigger input event đúng cách như Puppeteer
-  await chrome.debugger.sendCommand({ tabId }, "Input.insertText", { text });
+  await chrome.debugger.sendCommand({ tabId }, "Input.insertText", {
+    text: String(text ?? ""),
+  });
 
   console.log("CDP insertText done:", text.substring(0, 40));
+}
+
+async function cdpClickAt(tabId, x, y) {
+  await attachDebugger(tabId);
+  await chrome.debugger.sendCommand({ tabId }, "Input.dispatchMouseEvent", {
+    type: "mouseMoved",
+    x,
+    y,
+    button: "none",
+    clickCount: 0,
+  });
+  await sleep(60);
+  await chrome.debugger.sendCommand({ tabId }, "Input.dispatchMouseEvent", {
+    type: "mousePressed",
+    x,
+    y,
+    button: "left",
+    clickCount: 1,
+  });
+  await sleep(40);
+  await chrome.debugger.sendCommand({ tabId }, "Input.dispatchMouseEvent", {
+    type: "mouseReleased",
+    x,
+    y,
+    button: "left",
+    clickCount: 1,
+  });
 }
 
 // ==================== MESSAGES ====================
@@ -102,6 +187,13 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
   if (msg.action === "cdp-type") {
     cdpTypeText(msg.tabId, msg.text)
+      .then(() => sendResponse({ ok: true }))
+      .catch((err) => sendResponse({ error: err.message }));
+    return true;
+  }
+
+  if (msg.action === "cdp-click") {
+    cdpClickAt(msg.tabId, msg.x, msg.y)
       .then(() => sendResponse({ ok: true }))
       .catch((err) => sendResponse({ error: err.message }));
     return true;

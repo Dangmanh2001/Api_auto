@@ -1,4 +1,4 @@
-﻿﻿// content-flow.js - chạy trên https://labs.google/fx/vi/tools/flow
+﻿// content-flow.js - chạy trên https://labs.google/fx/vi/tools/flow
 
 const rnd = (min, max) => Math.floor(Math.random() * (max - min + 1) + min);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -122,6 +122,48 @@ async function realClick(el) {
   await sleep(rnd(300, 600));
 }
 
+async function cdpClick(el) {
+  if (!el) return;
+  el.scrollIntoView({ block: "center", behavior: "smooth" });
+  await sleep(500);
+  const rect = el.getBoundingClientRect();
+  const x = rect.left + rect.width / 2;
+  const y = rect.top + rect.height / 2;
+
+  await new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage(
+      { action: "cdp-click", tabId: _currentTabId, x, y },
+      (res) => {
+        if (res?.error) reject(new Error(res.error));
+        else resolve();
+      },
+    );
+  });
+}
+
+async function clickWithTrustedFallback(el) {
+  if (!el) return;
+  try {
+    await cdpClick(el);
+    return;
+  } catch (err) {
+    console.warn("cdpClick failed, fallback to realClick:", err.message);
+  }
+  await realClick(el);
+}
+
+function findRenderSubmitButton() {
+  return [...document.querySelectorAll("button")].find((b) => {
+    const icon = b.querySelector("i")?.textContent?.trim();
+    const text = (b.textContent || "").trim();
+    return (
+      icon === "arrow_forward" &&
+      /tạo|create|generate/i.test(text) &&
+      b.getAttribute("aria-haspopup") !== "menu"
+    );
+  });
+}
+
 // Tìm button theo text content chứa
 function findButtonByText(text) {
   return [...document.querySelectorAll("button")].find((b) =>
@@ -228,6 +270,41 @@ function resolveBatchSize(total, preferred = 4) {
   return Math.min(size, total);
 }
 
+function getVisiblePromptText() {
+  const boxes = [...document.querySelectorAll('[role="textbox"]')]
+    .filter((el) => {
+      const r = el.getBoundingClientRect();
+      const style = window.getComputedStyle(el);
+      return (
+        r.width > 0 &&
+        r.height > 0 &&
+        r.bottom > 0 &&
+        style.visibility !== "hidden" &&
+        style.display !== "none" &&
+        el.getAttribute("aria-hidden") !== "true"
+      );
+    })
+    .sort((a, b) => b.getBoundingClientRect().top - a.getBoundingClientRect().top);
+
+  const el = boxes[0];
+  return (el?.textContent || "").trim();
+}
+
+function normalizeTextForCompare(text) {
+  return String(text || "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function promptLooksApplied(expected) {
+  const actual = normalizeTextForCompare(getVisiblePromptText());
+  const target = normalizeTextForCompare(expected);
+  if (!target) return actual.length > 0;
+  if (!actual) return false;
+  return actual.includes(target.slice(0, Math.min(target.length, 24)));
+}
+
 // Gõ trong main world của trang qua CDP Runtime.evaluate
 // React nhận đúng state vì execCommand chạy cùng world với React
 async function humanType(_element, text) {
@@ -240,6 +317,24 @@ async function humanType(_element, text) {
       },
     );
   });
+
+  await sleep(250);
+  if (!promptLooksApplied(text)) {
+    const el = document.querySelector('[role="textbox"]');
+    if (el) {
+      focusTextBox(el);
+      try {
+        document.execCommand("selectAll", false);
+      } catch {}
+      try {
+        document.execCommand("insertText", false, text);
+      } catch {
+        el.textContent = text;
+      }
+      el.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    }
+  }
+
   await humanPause([350, 900], {
     microPauseChance: 0.35,
     microPauseRange: [300, 900],
@@ -462,6 +557,29 @@ function hasRetryButton(root) {
       b.querySelector("i")?.textContent?.trim() === "refresh"
     );
   });
+}
+
+function isRenderButtonReady() {
+  const btn = findRenderSubmitButton();
+  return (
+    !!btn &&
+    !btn.disabled &&
+    btn.getAttribute("aria-disabled") !== "true"
+  );
+}
+
+function isAnyGenerationInProgress() {
+  if (
+    document.querySelector(
+      '[class*="generating"], [class*="spinner"], [aria-busy="true"]',
+    )
+  ) {
+    return true;
+  }
+
+  return [...document.querySelectorAll("*")]
+    .filter((el) => el.childElementCount === 0 && el.textContent)
+    .some((el) => /^\d+%$/.test(el.textContent.trim()));
 }
 
 function isVideoTileComplete(tile) {
@@ -688,7 +806,13 @@ async function setupImagePage(aspectRatio, modelType, renderCount = "x1") {
 }
 
 // ==================== WAIT FOR IMAGES ====================
-async function waitForImages(_expectedCount, log, previousTopSignature = "") {
+async function waitForImages(
+  _expectedCount,
+  log,
+  previousTopSignature = "",
+  options = {},
+) {
+  const { allowComposerReadyFallback = false } = options;
   let stableCount = 0;
   const STABLE_NEEDED = 3;
   const TIMEOUT_MS = 10 * 60 * 1000;
@@ -722,6 +846,14 @@ async function waitForImages(_expectedCount, log, previousTopSignature = "") {
 
     const topTile = getTopVisibleIndexedItem();
     if (!topTile) {
+      if (
+        allowComposerReadyFallback &&
+        isRenderButtonReady() &&
+        !isAnyGenerationInProgress()
+      ) {
+        log("✅ Composer đã sẵn sàng cho prompt tiếp theo");
+        break;
+      }
       stableCount = 0;
       continue;
     }
@@ -735,6 +867,15 @@ async function waitForImages(_expectedCount, log, previousTopSignature = "") {
     if (!isImageTileComplete(topTile)) {
       stableCount = 0;
       continue;
+    }
+
+    if (
+      allowComposerReadyFallback &&
+      isRenderButtonReady() &&
+      !isAnyGenerationInProgress()
+    ) {
+      log("✅ Render ảnh xong (composer ready)");
+      break;
     }
 
     stableCount++;
@@ -775,15 +916,26 @@ async function runTextToVideo(params, log) {
         microPauseRange: [500, 1200],
       });
 
-      const createBtn =
-        [...document.querySelectorAll("button")].find(
-          (b) => b.querySelector("i")?.textContent?.trim() === "arrow_forward",
-        ) ||
-        [...document.querySelectorAll("button")].find(
-          (b) => b.textContent?.trim() === "Tạo",
-        );
+      await waitForCondition(() => getVisiblePromptText().length > 0, 5000);
+      if (!getVisiblePromptText()) {
+        log("⚠️ Prompt chưa vào ô nhập, gõ lại...");
+        await humanType(textbox, prompt);
+        await waitForCondition(() => getVisiblePromptText().length > 0, 5000);
+      }
 
-      if (createBtn) await realClick(createBtn);
+      await waitForCondition(() => {
+        const btn = findRenderSubmitButton();
+        return (
+          btn &&
+          !btn.disabled &&
+          btn.getAttribute("aria-disabled") !== "true"
+        );
+      }, 15000);
+
+      const createBtn = findRenderSubmitButton();
+      if (!createBtn) throw new Error("Không tìm thấy nút Tạo (arrow_forward)");
+
+      await clickWithTrustedFallback(createBtn);
       log(`✅ Đã gửi prompt: ${prompt.substring(0, 30)}...`);
       await humanPause([6000, 13000], {
         microPauseChance: 0.35,
@@ -907,10 +1059,10 @@ async function runTextToImage(params, log) {
   for (let i = 0; i < promptList.length; i += effectiveBatchSize) {
     const batch = promptList.slice(i, i + effectiveBatchSize);
     const groupNumber = Math.floor(i / effectiveBatchSize) + 1;
-    const previousTopSignature = getTileSignature(getTopVisibleIndexedItem());
     log(`📦 Đang xử lý nhóm ảnh ${groupNumber} (${batch.length} prompts)`);
 
     for (const prompt of batch) {
+      const previousTopSignature = getTileSignature(getTopVisibleIndexedItem());
       const textbox = await waitFor('[role="textbox"]');
       await humanPause([1500, 3200], {
         microPauseChance: 0.3,
@@ -922,32 +1074,30 @@ async function runTextToImage(params, log) {
         microPauseRange: [500, 1200],
       });
 
-      const createBtn =
-        [...document.querySelectorAll("button")].find(
-          (b) => b.querySelector("i")?.textContent?.trim() === "arrow_forward",
-        ) ||
-        [...document.querySelectorAll("button")].find(
-          (b) => b.textContent?.trim() === "Tạo",
+      await waitForCondition(() => {
+        const btn = findRenderSubmitButton();
+        return (
+          btn &&
+          !btn.disabled &&
+          btn.getAttribute("aria-disabled") !== "true"
         );
+      }, 15000);
 
-      if (createBtn) await realClick(createBtn);
+      const createBtn = findRenderSubmitButton();
+      if (!createBtn) throw new Error("Không tìm thấy nút Tạo (arrow_forward)");
+
+      await clickWithTrustedFallback(createBtn);
       log(`✅ Đã gửi prompt: ${prompt.substring(0, 30)}...`);
-      await humanPause([6000, 13000], {
-        microPauseChance: 0.35,
-        microPauseRange: [800, 2000],
-        longPauseChance: 0.18,
-        longPauseRange: [12000, 24000],
+      log("⏳ Chờ ảnh mới hoàn thành...");
+      await waitForImages(1, log, previousTopSignature, {
+        allowComposerReadyFallback: true,
       });
+      log("🚀 Đã hoàn thành ảnh 1 prompt");
+
     }
 
-    await waitForImages(batch.length, log, previousTopSignature);
     log(`🚀 Đã hoàn thành nhóm ảnh ${groupNumber}`);
-    await humanPause([7000, 15000], {
-      microPauseChance: 0.25,
-      microPauseRange: [1000, 2500],
-      longPauseChance: 0.12,
-      longPauseRange: [15000, 30000],
-    });
+
   }
 }
 
