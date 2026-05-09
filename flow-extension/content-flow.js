@@ -266,8 +266,8 @@ async function simulateHumanActivity() {
 function resolveBatchSize(total, preferred = 4) {
   if (!Number.isFinite(total) || total <= 0) return 1;
   const size = Number.parseInt(preferred, 10);
-  if (!Number.isInteger(size) || size <= 0) return Math.min(4, total);
-  return Math.min(size, total);
+  if (!Number.isInteger(size) || size <= 0) return 1;
+  return Math.min(size, total, 2);
 }
 
 function getVisiblePromptText() {
@@ -582,7 +582,22 @@ function isAnyGenerationInProgress() {
     .some((el) => /^\d+%$/.test(el.textContent.trim()));
 }
 
+async function waitForRenderIdle(timeout = 12 * 60 * 1000) {
+  await waitForCondition(() => !isAnyGenerationInProgress(), timeout);
+}
+
+let __submitCount = 0;
+async function cooldownIfNeeded(log) {
+  __submitCount += 1;
+  if (__submitCount % 20 !== 0) return;
+  const ms = rnd(90_000, 180_000);
+  if (log) log(`⏸️ Cooldown chống rate-limit ${Math.round(ms / 1000)}s`);
+  await sleep(ms);
+}
+
 async function submitRenderButton(log, promptPreview = "") {
+  // Tránh gửi burst request khi job cũ còn đang chạy
+  await waitForRenderIdle();
   await waitForCondition(() => {
     const btn = findRenderSubmitButton();
     return (
@@ -600,6 +615,7 @@ async function submitRenderButton(log, promptPreview = "") {
     const preview = String(promptPreview || "").substring(0, 30);
     log(`✅ Đã gửi prompt: ${preview}...`);
   }
+  await cooldownIfNeeded(log);
 }
 
 function isVideoTileComplete(tile) {
