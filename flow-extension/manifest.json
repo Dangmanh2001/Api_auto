@@ -3,7 +3,15 @@
   "name": "Flow Agent",
   "version": "1.0",
   "description": "Automation agent cho Google Flow - chạy trực tiếp trên máy khách",
-  "permissions": ["tabs", "scripting", "storage", "debugger"],
+  "permissions": [
+    "tabs",
+    "scripting",
+    "storage",
+    "debugger",
+    "proxy",
+    "webRequest",
+    "webRequestAuthProvider"
+  ],
   "host_permissions": [
     "http://*/*",
     "http://localhost/*",

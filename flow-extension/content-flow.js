@@ -2,6 +2,10 @@
 
 const rnd = (min, max) => Math.floor(Math.random() * (max - min + 1) + min);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+let __flowThrottleDetected = false;
+let __flowThrottleReason = "";
+let __flowLastApiError = null;
+let __lastTextToImageSubmitAt = 0;
 
 function keepPageActive() {
   try {
@@ -169,6 +173,35 @@ function findButtonByText(text) {
   return [...document.querySelectorAll("button")].find((b) =>
     b.textContent?.includes(text),
   );
+}
+
+function findButtonByAnyText(texts = []) {
+  return [...document.querySelectorAll("button")].find((b) => {
+    const t = b.textContent || "";
+    return texts.some((needle) => t.includes(needle));
+  });
+}
+
+function findDeleteErrorButtons() {
+  return [...document.querySelectorAll("button")].filter((b) => {
+    const icon = b.querySelector("i")?.textContent?.trim().toLowerCase() || "";
+    const text = (b.textContent || "").toLowerCase();
+    return (
+      icon === "delete_forever" ||
+      text.includes("xoá") ||
+      text.includes("xóa")
+    );
+  });
+}
+
+async function clearErrorTiles(log) {
+  const deleteBtns = findDeleteErrorButtons();
+  if (deleteBtns.length === 0) return false;
+
+  await realClick(deleteBtns[0]);
+  await sleep(rnd(400, 900));
+  log(`🧹 Đã bấm Xoá tile lỗi (${deleteBtns.length} nút phát hiện)`);
+  return true;
 }
 
 function normalizeRenderCount(value) {
@@ -582,6 +615,263 @@ function isAnyGenerationInProgress() {
     .some((el) => /^\d+%$/.test(el.textContent.trim()));
 }
 
+function pageContainsCaptchaSignal() {
+  const text = (document.body?.innerText || "").toLowerCase();
+  return (
+    text.includes("recaptcha") ||
+    text.includes("captcha") ||
+    text.includes("unusual traffic") ||
+    text.includes("lưu lượng bất thường")
+  );
+}
+
+function detectPageBlockSignal() {
+  const url = String(location.href || "").toLowerCase();
+  const title = String(document.title || "").toLowerCase();
+  const text = String(document.body?.innerText || "").toLowerCase();
+
+  if (url.includes("accounts.google.com") || url.includes("/signin")) {
+    return "login-redirect";
+  }
+  if (title.includes("403") || title.includes("forbidden")) {
+    return "forbidden-title";
+  }
+  if (
+    text.includes("403") ||
+    text.includes("forbidden") ||
+    text.includes("access denied") ||
+    text.includes("unusual traffic") ||
+    text.includes("lưu lượng bất thường")
+  ) {
+    return "blocked-content";
+  }
+  return "";
+}
+
+function isThrottleLikeError(err) {
+  const msg = String(err?.message || err || "").toLowerCase();
+  return (
+    msg.includes("retry button detected") ||
+    msg.includes("400") ||
+    msg.includes("403") ||
+    msg.includes("429") ||
+    msg.includes("5xx") ||
+    msg.includes("500") ||
+    msg.includes("502") ||
+    msg.includes("503") ||
+    msg.includes("504") ||
+    msg.includes("captcha") ||
+    msg.includes("recaptcha")
+  );
+}
+
+function classifyFlowApiError(err) {
+  const msg = String(err?.message || err || "").toLowerCase();
+  if (msg.includes("retry button detected")) {
+    return { code: 429, retryable: true, reason: "tile-retryable" };
+  }
+  if (msg.includes("429")) return { code: 429, retryable: true, reason: "rate-limit" };
+  if (msg.includes("500") || msg.includes("502") || msg.includes("503") || msg.includes("504") || msg.includes("5xx")) {
+    return { code: 500, retryable: true, reason: "server-error" };
+  }
+  if (msg.includes("403")) return { code: 403, retryable: false, reason: "forbidden" };
+  if (msg.includes("400")) return { code: 400, retryable: false, reason: "bad-request" };
+  if (msg.includes("captcha") || msg.includes("recaptcha")) {
+    return { code: 403, retryable: false, reason: "captcha" };
+  }
+  return { code: 0, retryable: false, reason: "unknown" };
+}
+
+async function requestSessionRestart(reason = "") {
+  const projectMatch = String(location.href || "").match(/\/project\/([a-f0-9-]+)/i);
+  const projectId = projectMatch?.[1] || "";
+  await new Promise((resolve) => {
+    chrome.runtime.sendMessage(
+      { action: "restart-flow-session", reason, params: { projectId } },
+      () => resolve(),
+    );
+  });
+}
+
+function findDeleteButton(root) {
+  if (!root) return null;
+  return [...root.querySelectorAll("button")].find((b) => {
+    const icon = b.querySelector("i")?.textContent?.trim()?.toLowerCase() || "";
+    const label = (b.getAttribute("aria-label") || "").toLowerCase();
+    const txt = (b.textContent || "").toLowerCase();
+    return (
+      icon.includes("delete_forever") ||
+      txt.includes("xoá") ||
+      txt.includes("xóa") ||
+      txt.includes("delete") ||
+      label.includes("delete") ||
+      txt.includes("delete_forever")
+    );
+  }) || null;
+}
+
+function getRetryErrorTiles() {
+  return getIndexedItems()
+    .map((item) => item.el)
+    .filter((tile) => {
+      const txt = (tile.textContent || "").toLowerCase();
+      return (
+        hasRetryButton(tile) ||
+        txt.includes("failed") ||
+        txt.includes("unusual activity") ||
+        txt.includes("help center")
+      );
+    });
+}
+
+async function retryThenDeleteFailedTiles(log) {
+  const tiles = getRetryErrorTiles();
+  if (tiles.length === 0) return false;
+
+  let didAnyAction = false;
+  for (const tile of tiles) {
+    let retried = false;
+    const beforeCount = getIndexedItemCount();
+    const tileSignatureBefore = getTileSignature(tile);
+    const retryBtn = [...tile.querySelectorAll("button")].find((b) => {
+      const btnText = (b.textContent || "").toLowerCase();
+      const icon = b.querySelector("i")?.textContent?.trim()?.toLowerCase() || "";
+      return btnText.includes("thử lại") || btnText.includes("retry") || icon === "refresh";
+    });
+
+    if (retryBtn) {
+      await clickWithTrustedFallback(retryBtn);
+      didAnyAction = true;
+      retried = true;
+      if (log) log("🔁 Đã bấm Thử lại cho tile lỗi");
+      await sleep(rnd(700, 1200));
+    } else {
+      if (log) log("⚠️ Không tìm thấy nút Thử lại trên tile lỗi, bỏ qua xóa");
+    }
+
+    if (!retried) continue;
+
+    // Chỉ xóa sau khi retry đã thật sự tạo tiến trình mới để tránh mất prompt trong batch.
+    await waitForCondition(() => {
+      const afterCount = getIndexedItemCount();
+      if (afterCount > beforeCount) return true;
+
+      const currentSig = getTileSignature(tile);
+      if (currentSig && currentSig !== tileSignatureBefore) return true;
+
+      const tileText = (tile.textContent || "").toLowerCase();
+      return (
+        tileText.includes("%") ||
+        tileText.includes("đang tạo") ||
+        tile.querySelector('[class*="generating"], [class*="spinner"], [aria-busy="true"]')
+      );
+    }, 12000);
+    await sleep(rnd(800, 1500));
+
+    // Ưu tiên xóa đúng tile vừa bấm retry (không xóa tile khác)
+    const tileRoot = retryBtn?.closest('[data-item-index], [data-tile-id]') || tile;
+    const deleteBtn = findDeleteButton(tileRoot) || findDeleteButton(tile);
+    if (deleteBtn) {
+      await clickWithTrustedFallback(deleteBtn);
+      didAnyAction = true;
+      if (log) log("🗑️ Đã bấm delete_forever để xóa tile lỗi cũ");
+      await sleep(rnd(700, 1200));
+    }
+  }
+  return didAnyAction;
+}
+
+async function openFlowRootAndWait() {
+  const flowRoot = "https://labs.google/fx/vi/tools/flow";
+  if (!String(location.href || "").startsWith(flowRoot)) {
+    location.href = flowRoot;
+  }
+  await waitForCondition(
+    () => String(location.href || "").includes("/fx/vi/tools/flow"),
+    45000,
+  );
+  await sleep(rnd(1800, 3200));
+}
+
+async function clickNewProjectEntry(logPrefix = "") {
+  const newBtn = findButtonByAnyText(["Dự án mới", "New project", "New Project"]);
+  if (newBtn) {
+    newBtn.scrollIntoView({ block: "center" });
+    await realClick(newBtn);
+    if (logPrefix) console.log(`${logPrefix}Đã click Dự án mới`);
+    return true;
+  }
+
+  // Fallback: nút "+" trên top bar (tránh nút "+" ở composer phía dưới)
+  const topPlusBtn = [...document.querySelectorAll("button")]
+    .filter((b) => {
+      const icon = b.querySelector("i")?.textContent?.trim()?.toLowerCase() || "";
+      if (icon !== "add") return false;
+      const rect = b.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0 && rect.top < window.innerHeight * 0.25;
+    })
+    .sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left)[0];
+
+  if (topPlusBtn) {
+    await realClick(topPlusBtn);
+    if (logPrefix) console.log(`${logPrefix}Đã click nút + (fallback tạo project)`);
+    return true;
+  }
+
+  return false;
+}
+
+function installFlowResponseWatcher() {
+  if (window.__flowResponseWatcherInstalled) return;
+  window.__flowResponseWatcherInstalled = true;
+
+  const targetPath = "flowMedia:batchGenerateImages";
+
+  const markThrottle = (status, url = "", payload = null) => {
+    if (status < 400) return;
+    __flowThrottleDetected = true;
+    __flowThrottleReason = `http-${status}:${url}`;
+    __flowLastApiError = { status, url, payload, at: new Date().toISOString() };
+  };
+
+  const originalFetch = window.fetch.bind(window);
+  window.fetch = async (...args) => {
+    const res = await originalFetch(...args);
+    try {
+      const url = String(args?.[0]?.url || args?.[0] || "");
+      if (url.includes(targetPath)) {
+        let payload = null;
+        if (res.status >= 400) {
+          try {
+            payload = await res.clone().text();
+          } catch {}
+        }
+        markThrottle(res.status, url, payload);
+      }
+    } catch {}
+    return res;
+  };
+
+  const originalOpen = XMLHttpRequest.prototype.open;
+  const originalSend = XMLHttpRequest.prototype.send;
+  XMLHttpRequest.prototype.open = function (...args) {
+    this.__flowUrl = String(args?.[1] || "");
+    return originalOpen.apply(this, args);
+  };
+  XMLHttpRequest.prototype.send = function (...args) {
+    this.addEventListener("loadend", () => {
+      try {
+        if (String(this.__flowUrl || "").includes(targetPath)) {
+          const payload =
+            this.status >= 400 ? String(this.responseText || "").slice(0, 2000) : null;
+          markThrottle(this.status, this.__flowUrl, payload);
+        }
+      } catch {}
+    });
+    return originalSend.apply(this, args);
+  };
+}
+
 async function waitForRenderIdle(timeout = 12 * 60 * 1000) {
   await waitForCondition(() => !isAnyGenerationInProgress(), timeout);
 }
@@ -644,12 +934,10 @@ async function setupPage(aspectRatio, modelType, mode, renderCount = "x1") {
     );
   }
 
-  // Đợi nút Dự án mới
-  await waitForCondition(() => !!findButtonByText("Dự án mới"));
-  const newBtn = findButtonByText("Dự án mới");
-  newBtn.scrollIntoView({ block: "center" });
-  await realClick(newBtn);
-  console.log("Đã click Dự án mới");
+  // Luôn quay về trang Flow root để hiện nút "Dự án mới"
+  await openFlowRootAndWait();
+  let opened = await clickNewProjectEntry();
+  if (!opened) throw new Error("Không tìm thấy nút Dự án mới/New project");
   await sleep(600);
 
   try {
@@ -781,12 +1069,14 @@ async function setupImagePage(aspectRatio, modelType, renderCount = "x1") {
     );
   }
 
-  // Đợi nút Dự án mới
-  await waitForCondition(() => !!findButtonByText("Dự án mới"));
-  const newBtn = findButtonByText("Dự án mới");
-  newBtn.scrollIntoView({ block: "center" });
-  await realClick(newBtn);
-  console.log("Đã click Dự án mới");
+  // Luôn quay về trang Flow root để hiện nút "Dự án mới"
+  await openFlowRootAndWait();
+  let opened = await clickNewProjectEntry();
+  if (!opened) {
+    await openFlowRootAndWait();
+    opened = await clickNewProjectEntry("Fallback: ");
+  }
+  if (!opened) throw new Error("Không tìm thấy nút Dự án mới/New project");
   await sleep(600);
 
   try {
@@ -805,8 +1095,9 @@ async function setupImagePage(aspectRatio, modelType, renderCount = "x1") {
     await sleep(rnd(1000, 2000));
 
     // Chọn tỉ lệ khung hình
-    await waitForCondition(() => !!findButtonByText(aspectRatio));
+    await waitForCondition(() => !!findButtonByText(aspectRatio), 20000);
     const ratioBtn = findButtonByText(aspectRatio);
+    if (!ratioBtn) throw new Error(`Không tìm thấy nút tỉ lệ: ${aspectRatio}`);
     await clickAndVerify(ratioBtn, `Chọn ${aspectRatio}`);
     await sleep(rnd(1200, 2000));
 
@@ -825,13 +1116,16 @@ async function setupImagePage(aspectRatio, modelType, renderCount = "x1") {
     const optionEl = await waitForXPath(
       `//div[@role='menuitem']//span[contains(text(), '${modelType}')]`,
     );
+    if (!optionEl) throw new Error(`Không tìm thấy model: ${modelType}`);
     await realClick(optionEl);
     console.log("✅ Đã chọn Model");
     await sleep(rnd(1000, 2000));
 
     // Chọn x1
-    await waitForCondition(() => !!findButtonByText("1x"));
-    await realClick(findButtonByText("1x"));
+    await waitForCondition(() => !!findButtonByText("1x"), 15000);
+    const oneXBtn = findButtonByText("1x");
+    if (!oneXBtn) throw new Error("Không tìm thấy nút 1x");
+    await realClick(oneXBtn);
     await sleep(rnd(500, 1000));
     console.log(`✅ Đã chọn số lượng: ${renderCount}`);
   } catch (e) {
@@ -848,7 +1142,7 @@ async function waitForImages(
   previousTopSignature = "",
   options = {},
 ) {
-  const { allowComposerReadyFallback = false } = options;
+  const { allowComposerReadyFallback = false, disableSessionRestart = false } = options;
   let stableCount = 0;
   const STABLE_NEEDED = 3;
   const TIMEOUT_MS = 10 * 60 * 1000;
@@ -857,6 +1151,25 @@ async function waitForImages(
   log("Chờ ảnh mới hoàn thành...");
 
   while (true) {
+    if (__flowThrottleDetected) {
+      if (disableSessionRestart) {
+        const status = __flowLastApiError?.status || "unknown";
+        throw new Error(`http-${status} detected`);
+      }
+      log("🛑 Phát hiện HTTP 400/429 từ batchGenerateImages. Restart session ngay.");
+      await requestSessionRestart(__flowThrottleReason || "http-400-429");
+      throw new Error("400/429 detected");
+    }
+
+    if (pageContainsCaptchaSignal()) {
+      if (disableSessionRestart) {
+        throw new Error("reCAPTCHA detected");
+      }
+      log("🛑 Phát hiện CAPTCHA/reCAPTCHA. Restart session ngay.");
+      await requestSessionRestart("captcha-signal-in-page");
+      throw new Error("reCAPTCHA detected");
+    }
+
     await sleep(rnd(2500, 5000));
 
     if (Date.now() - startTime > TIMEOUT_MS) {
@@ -873,11 +1186,19 @@ async function waitForImages(
     });
 
     if (retryBtns.length > 0) {
-      stableCount = 0;
-      log(`⚠️ Phát hiện ${retryBtns.length} ảnh lỗi, đang Thử lại...`);
-      await realClick(retryBtns[0]);
-      await sleep(rnd(1500, 3000));
-      continue;
+      if (disableSessionRestart) {
+        log(`⚠️ Phát hiện ${retryBtns.length} tile lỗi. Bấm Thử lại + xóa tile lỗi cũ...`);
+        const handled = await retryThenDeleteFailedTiles(log);
+        if (!handled) {
+          throw new Error("retry button detected");
+        }
+        stableCount = 0;
+        await sleep(rnd(1800, 3200));
+        continue;
+      }
+      log(`🛑 Phát hiện ${retryBtns.length} tile lỗi. Không bấm Thử lại, restart session.`);
+      await requestSessionRestart("retry-button-detected");
+      throw new Error("retry button detected - restart requested");
     }
 
     const topTile = getTopVisibleIndexedItem();
@@ -1064,44 +1385,223 @@ async function runImageToVideo(params, log, serverUrl) {
 }
 
 async function runTextToImage(params, log) {
+  installFlowResponseWatcher();
   const { aspectRatio, modelType, promptList, batchSize } = params;
+  let startIndex = Math.max(
+    0,
+    Number.parseInt(params.resumeFromIndex ?? 0, 10) || 0,
+  );
   const renderCount = normalizeRenderCount(params.renderCount);
+  const maxPromptRetries = Math.max(
+    1,
+    Number.parseInt(params.maxPromptRetries ?? 5, 10) || 5,
+  );
+  const maxConsecutiveFailures = Math.max(
+    1,
+    Number.parseInt(params.maxConsecutiveFailures ?? 3, 10) || 3,
+  );
+  const maxPromptsPerSession = Math.max(
+    1,
+    Number.parseInt(params.maxPromptsPerSession ?? 8, 10) || 8,
+  );
+  const sessionCooldownMinMs = Math.max(
+    10_000,
+    Number.parseInt(params.sessionCooldownMinMs ?? 45_000, 10) || 45_000,
+  );
+  const sessionCooldownMaxMs = Math.max(
+    sessionCooldownMinMs + 5_000,
+    Number.parseInt(params.sessionCooldownMaxMs ?? 120_000, 10) || 120_000,
+  );
+  const minSubmitGapMs = Math.max(
+    15_000,
+    Number.parseInt(params.minSubmitGapMs ?? 35_000, 10) || 35_000,
+  );
+  const maxSubmitGapMs = Math.max(
+    minSubmitGapMs + 5_000,
+    Number.parseInt(params.maxSubmitGapMs ?? 90_000, 10) || 90_000,
+  );
   await setupImagePage(aspectRatio, modelType, renderCount);
   blockEditNavigation();
 
-  const effectiveBatchSize = resolveBatchSize(
-    promptList.length,
-    batchSize ?? 4,
+  const configuredBatchMax = Math.min(
+    4,
+    Math.max(2, Number.parseInt(batchSize ?? 4, 10) || 4),
   );
-  for (let i = 0; i < promptList.length; i += effectiveBatchSize) {
-    const batch = promptList.slice(i, i + effectiveBatchSize);
-    const groupNumber = Math.floor(i / effectiveBatchSize) + 1;
-    log(`📦 Đang xử lý nhóm ảnh ${groupNumber} (${batch.length} prompts)`);
+  log(
+    `🛡️ Safe mode text-to-image: batch ngẫu nhiên 2-${configuredBatchMax} (yêu cầu=${batchSize ?? 4})`,
+  );
+  if (startIndex > 0) {
+    log(`♻️ Resume text-to-image từ prompt ${startIndex + 1}/${promptList.length}`);
+  }
 
-    for (const prompt of batch) {
-      const previousTopSignature = getTileSignature(getTopVisibleIndexedItem());
-      const textbox = await waitFor('[role="textbox"]');
-      await humanPause([1500, 3200], {
-        microPauseChance: 0.3,
-        microPauseRange: [500, 1200],
-      });
-      await humanType(textbox, prompt);
-      await humanPause([1500, 3200], {
-        microPauseChance: 0.3,
-        microPauseRange: [500, 1200],
-      });
-
-      await submitRenderButton(log, prompt);
-      log("⏳ Chờ ảnh mới hoàn thành...");
-      await waitForImages(1, log, previousTopSignature, {
-        allowComposerReadyFallback: true,
-      });
-      log("🚀 Đã hoàn thành ảnh 1 prompt");
-
+  let promptsInSession = 0;
+  let sessionNo = 1;
+  let consecutiveFailures = 0;
+  let batchNo = 0;
+  for (let i = startIndex; i < promptList.length; ) {
+    if (promptsInSession >= maxPromptsPerSession) {
+      log(
+        `⏸️ Đã đạt giới hạn ${maxPromptsPerSession} prompt ở phiên ${sessionNo}. Tạo phiên mới để chạy tiếp...`,
+      );
+      const sessionCooldownMs = rnd(sessionCooldownMinMs, sessionCooldownMaxMs);
+      log(
+        `🕒 Nghỉ ${Math.round(sessionCooldownMs / 1000)}s giữa 2 phiên để giảm 403/429`,
+      );
+      await sleep(sessionCooldownMs);
+      await setupImagePage(aspectRatio, modelType, renderCount);
+      blockEditNavigation();
+      promptsInSession = 0;
+      sessionNo += 1;
+      log(
+        `▶️ Bắt đầu phiên ${sessionNo}, tiếp tục từ prompt ${i + 1}/${promptList.length}`,
+      );
     }
 
-    log(`🚀 Đã hoàn thành nhóm ảnh ${groupNumber}`);
+    const remaining = promptList.length - i;
+    const sessionSlots = Math.max(1, maxPromptsPerSession - promptsInSession);
+    const randomBatchSize = rnd(2, configuredBatchMax);
+    const currentBatchSize = Math.max(
+      1,
+      Math.min(remaining, randomBatchSize, sessionSlots),
+    );
+    const batchStart = i;
+    const batchEnd = i + currentBatchSize;
+    const batchPrompts = promptList.slice(batchStart, batchEnd);
+    batchNo += 1;
+    let batchRetry = 0;
 
+    while (batchRetry <= maxPromptRetries) {
+      __flowThrottleDetected = false;
+      __flowThrottleReason = "";
+      __flowLastApiError = null;
+      log(
+        `📚 Batch ${batchNo}: prompt ${batchStart + 1}-${batchEnd}/${promptList.length} (size=${batchPrompts.length}, lần ${batchRetry + 1}/${maxPromptRetries + 1})`,
+      );
+
+      try {
+        const blockReason = detectPageBlockSignal();
+        if (blockReason) {
+          throw new Error(`page-blocked:${blockReason}`);
+        }
+
+        const previousTopSignature = getTileSignature(getTopVisibleIndexedItem());
+        for (let idx = batchStart; idx < batchEnd; idx += 1) {
+          const prompt = promptList[idx];
+          reportTextToImageProgress(idx, "started", promptList.length);
+
+          const textbox = await waitFor('[role="textbox"]');
+          await humanPause([1200, 2600], {
+            microPauseChance: 0.25,
+            microPauseRange: [400, 900],
+          });
+          await humanType(textbox, prompt);
+          await humanPause([1200, 2600], {
+            microPauseChance: 0.25,
+            microPauseRange: [400, 900],
+          });
+
+          const gapTargetMs = rnd(minSubmitGapMs, maxSubmitGapMs);
+          const elapsedSinceSubmit = Date.now() - __lastTextToImageSubmitAt;
+          if (__lastTextToImageSubmitAt > 0 && elapsedSinceSubmit < gapTargetMs) {
+            const waitMs = gapTargetMs - elapsedSinceSubmit;
+            log(`⏳ Rate gate: chờ thêm ${Math.round(waitMs / 1000)}s trước khi submit`);
+            await sleep(waitMs);
+          }
+
+          await submitRenderButton(log, prompt);
+          __lastTextToImageSubmitAt = Date.now();
+          await humanPause([1200, 2800], {
+            microPauseChance: 0.2,
+            microPauseRange: [300, 900],
+          });
+        }
+
+        log(`⏳ Chờ batch ${batchPrompts.length} ảnh hoàn thành...`);
+        await waitForImages(batchPrompts.length, log, previousTopSignature, {
+          allowComposerReadyFallback: true,
+          disableSessionRestart: true,
+        });
+
+        for (let idx = batchStart; idx < batchEnd; idx += 1) {
+          reportTextToImageProgress(idx, "completed", promptList.length);
+        }
+        promptsInSession += batchPrompts.length;
+        if (consecutiveFailures > 0) {
+          log(`✅ API ổn định lại: failures ${consecutiveFailures} -> 0`);
+        }
+        consecutiveFailures = 0;
+        log(`🚀 Hoàn thành batch ${batchNo} (${batchPrompts.length} prompt)`);
+        await humanPause([15000, 45000], {
+          microPauseChance: 0.35,
+          microPauseRange: [1500, 4000],
+          longPauseChance: 0.2,
+          longPauseRange: [30000, 90000],
+        });
+        break;
+      } catch (err) {
+        const msg = String(err?.message || err || "");
+        const isPageBlocked = msg.includes("page-blocked:");
+        if (!isPageBlocked && !isThrottleLikeError(err)) throw err;
+        const detail = __flowLastApiError
+          ? `status=${__flowLastApiError.status}; body=${String(__flowLastApiError.payload || "").slice(0, 300)}`
+          : `reason=${msg}`;
+        log(`⚠️ [Batch ${batchNo}] API lỗi: ${detail}`);
+
+        consecutiveFailures += 1;
+        log(`⚠️ Consecutive failures: ${consecutiveFailures}/${maxConsecutiveFailures}`);
+        if (consecutiveFailures >= maxConsecutiveFailures) {
+          throw new Error(
+            `Dừng an toàn: ${consecutiveFailures} lỗi liên tiếp (max=${maxConsecutiveFailures})`,
+          );
+        }
+
+        const klass = isPageBlocked
+          ? { code: 403, retryable: false, reason: "page-blocked" }
+          : classifyFlowApiError(err);
+        if (!klass.retryable) {
+          if (
+            klass.code === 400 ||
+            klass.code === 403 ||
+            klass.reason === "captcha" ||
+            klass.reason === "page-blocked"
+          ) {
+            await clearErrorTiles(log);
+            const hardWaitMs = rnd(90_000, 210_000);
+            log(
+              `🧊 [Batch ${batchNo}] HTTP ${klass.code || "?"}/${klass.reason}. Nghỉ ${Math.round(hardWaitMs / 1000)}s rồi yêu cầu restart session để resume.`,
+            );
+            await sleep(hardWaitMs);
+            throw new Error(
+              `[Batch ${batchNo}] http-${klass.code || "unknown"} ${klass.reason} restart requested`,
+            );
+          }
+
+          log(`🛑 [Batch ${batchNo}] ${klass.reason} (HTTP ${klass.code || "?"}) - dừng batch, không spam retry.`);
+          throw new Error(
+            `[Batch ${batchNo}] non-retryable error (${klass.reason})`,
+          );
+        }
+
+        batchRetry += 1;
+        if (batchRetry > 3) {
+          throw new Error(
+            `[Batch ${batchNo}] retry-exhausted-3 reload-project-required`,
+          );
+        }
+        if (batchRetry > maxPromptRetries) {
+          throw new Error(
+            `[Batch ${batchNo}] retryable lỗi quá ${maxPromptRetries} lần`,
+          );
+        }
+        await clearErrorTiles(log);
+        const base = 45000 * batchRetry;
+        const backoffMs = Math.min(240000, base + rnd(15000, 90000));
+        log(`🔁 [Batch ${batchNo}] retryable (${klass.reason}), nghỉ ${Math.round(backoffMs / 1000)}s rồi retry ${batchRetry}/${maxPromptRetries}`);
+        await sleep(backoffMs);
+      }
+    }
+
+    i = batchEnd;
   }
 }
 
@@ -1229,6 +1729,19 @@ async function runIngredientsToVideo(params, log, serverUrl) {
 
 // ==================== PORT LISTENER ====================
 let _currentTabId = null;
+let _currentTaskId = null;
+
+function reportTextToImageProgress(index, state, total = 0) {
+  if (!_currentTaskId) return;
+  chrome.runtime.sendMessage({
+    action: "task-progress",
+    taskId: _currentTaskId,
+    phase: "text-to-image",
+    state,
+    index,
+    total,
+  });
+}
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.action === "flow-ping") {
@@ -1245,6 +1758,7 @@ chrome.runtime.onConnect.addListener((port) => {
 
     const { taskId, type, params, serverUrl, tabId } = msg;
     _currentTabId = tabId;
+    _currentTaskId = taskId;
 
     const log = (text) => {
       console.log(text);

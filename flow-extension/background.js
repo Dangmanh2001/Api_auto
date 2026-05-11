@@ -1,4 +1,155 @@
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const FLOW_URL = "https://labs.google/fx/vi/tools/flow";
+const taskProgressStore = new Map();
+let activeProxyConfig = null;
+let proxyAuthRetryCount = 0;
+
+function normalizeProxyConfig(raw = {}) {
+  const host = String(raw.host || "").trim();
+  const port = Number.parseInt(raw.port, 10);
+  const username = String(raw.username || "").trim();
+  const password = String(raw.password || "");
+  if (!host || !Number.isInteger(port) || port <= 0) {
+    throw new Error("Proxy config invalid: host/port");
+  }
+  return { host, port, username, password };
+}
+
+async function enableFixedProxy(raw = {}) {
+  const cfg = normalizeProxyConfig(raw);
+  await chrome.proxy.settings.set({
+    value: {
+      mode: "fixed_servers",
+      rules: {
+        singleProxy: {
+          scheme: "http",
+          host: cfg.host,
+          port: cfg.port,
+        },
+        bypassList: ["localhost", "127.0.0.1"],
+      },
+    },
+    scope: "regular",
+  });
+  activeProxyConfig = cfg;
+  proxyAuthRetryCount = 0;
+  return cfg;
+}
+
+chrome.webRequest.onAuthRequired.addListener(
+  (details, callback) => {
+    try {
+      if (!details.isProxy || !activeProxyConfig) {
+        callback({ cancel: false });
+        return;
+      }
+      if (proxyAuthRetryCount > 5) {
+        callback({ cancel: false });
+        return;
+      }
+      proxyAuthRetryCount += 1;
+      callback({
+        authCredentials: {
+          username: activeProxyConfig.username,
+          password: activeProxyConfig.password,
+        },
+      });
+    } catch {
+      callback({ cancel: false });
+    }
+  },
+  { urls: ["<all_urls>"] },
+  ["asyncBlocking"],
+);
+
+function getProjectIdFromParams(params = {}) {
+  if (params?.projectId) return String(params.projectId);
+
+  const fromUrl = String(params?.projectUrl || params?.flowUrl || "");
+  const match = fromUrl.match(/\/project\/([a-f0-9-]+)/i);
+  return match?.[1] || "";
+}
+
+function buildFlowUrl(params = {}) {
+  const projectId = getProjectIdFromParams(params);
+  if (projectId) return `${FLOW_URL}/project/${projectId}`;
+  return FLOW_URL;
+}
+
+function isRetryableThrottleError(err) {
+  const msg = String(err?.message || err || "").toLowerCase();
+  return (
+    msg.includes("400") ||
+    msg.includes("403") ||
+    msg.includes("429") ||
+    msg.includes("retry-exhausted-3") ||
+    msg.includes("recaptcha") ||
+    msg.includes("captcha") ||
+    msg.includes("unusual traffic") ||
+    msg.includes("restart requested")
+  );
+}
+
+async function postAgentLog(serverUrl, taskId, text) {
+  if (!serverUrl || !taskId) return;
+  try {
+    await fetch(`${serverUrl}/api/agent/log/${taskId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ msg: text }),
+    });
+  } catch {}
+}
+
+async function restartFlowSessionNow(params = {}) {
+  await closeFlowTabs();
+  await chrome.windows
+    .create({ url: buildFlowUrl(params), focused: true })
+    .catch(() => {});
+}
+
+function parseProxyEntry(entry) {
+  if (!entry) return null;
+  if (typeof entry === "object") {
+    const host = String(entry.host || "").trim();
+    const port = Number.parseInt(entry.port, 10);
+    if (!host || !Number.isInteger(port) || port <= 0) return null;
+    return {
+      host,
+      port,
+      username: String(entry.username || "").trim(),
+      password: String(entry.password || ""),
+    };
+  }
+  const raw = String(entry).trim();
+  if (!raw) return null;
+  const parts = raw.split(":");
+  if (parts.length < 4) return null;
+  const [host, portRaw, username, password] = parts;
+  const port = Number.parseInt(portRaw, 10);
+  if (!host || !Number.isInteger(port) || port <= 0) return null;
+  return { host, port, username: username || "", password: password || "" };
+}
+
+function getProxyCandidates(params = {}) {
+  const fromList = Array.isArray(params.proxyList) ? params.proxyList : [];
+  const parsedList = fromList.map(parseProxyEntry).filter(Boolean);
+  if (parsedList.length > 0) return parsedList;
+
+  const single = parseProxyEntry(params.proxy);
+  if (single) return [single];
+
+  return [parseProxyEntry("118.70.187.200:31722:pWnBpE:tXPhqp")].filter(Boolean);
+}
+
+async function captureLatestProjectIdFromOpenTabs() {
+  const tabs = await chrome.tabs.query({ url: ["https://labs.google/*"] });
+  const flowTabs = tabs.filter((t) => (t.url || "").includes("/fx/vi/tools/flow/project/"));
+  if (flowTabs.length === 0) return "";
+  const latest = flowTabs[flowTabs.length - 1];
+  const match = String(latest.url || "").match(/\/project\/([a-f0-9-]+)/i);
+  return match?.[1] || "";
+}
 
 // ==================== AGENT ID ====================
 async function getAgentId() {
@@ -229,9 +380,45 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   }
 
   if (msg.action === "run-task") {
-    runTask(msg)
+    runTaskWithRestart(msg)
       .then(sendResponse)
       .catch((err) => sendResponse({ error: err.message }));
+    return true;
+  }
+
+  if (msg.action === "enable-proxy") {
+    enableFixedProxy(msg.proxy || {})
+      .then((cfg) => sendResponse({ ok: true, host: cfg.host, port: cfg.port }))
+      .catch((err) => sendResponse({ error: err.message }));
+    return true;
+  }
+
+  if (msg.action === "task-progress") {
+    const { taskId, phase, state, index, total } = msg;
+    if (taskId && phase === "text-to-image" && Number.isInteger(index)) {
+      const current = taskProgressStore.get(taskId) || {
+        completedIndex: -1,
+        startedIndex: -1,
+        nextIndex: 0,
+        total: Number.isInteger(total) ? total : 0,
+      };
+      if (state === "started") {
+        current.startedIndex = index;
+      } else if (state === "completed") {
+        current.completedIndex = Math.max(current.completedIndex, index);
+        current.nextIndex = current.completedIndex + 1;
+      }
+      if (Number.isInteger(total) && total > 0) current.total = total;
+      taskProgressStore.set(taskId, current);
+    }
+    sendResponse({ ok: true });
+    return true;
+  }
+
+  if (msg.action === "restart-flow-session") {
+    // Do not restart immediately from content script.
+    // Let runTaskWithRestart coordinate restart + resume to avoid broken port flow.
+    sendResponse({ ok: true });
     return true;
   }
 });
@@ -242,7 +429,7 @@ chrome.runtime.onConnect.addListener((port) => {
   port.onMessage.addListener((msg) => {
     if (msg.action !== "run-task") return;
 
-    runTask(msg)
+    runTaskWithRestart(msg)
       .then(() => port.postMessage({ ok: true }))
       .catch((err) => port.postMessage({ error: err.message }));
   });
@@ -260,7 +447,7 @@ async function runTask({ taskId, type, params, serverUrl }) {
     "",
   );
   const tab = await chrome.tabs.create({
-    url: "https://labs.google/fx/vi/tools/flow",
+    url: buildFlowUrl(params),
     active: true,
   });
 
@@ -304,6 +491,122 @@ async function runTask({ taskId, type, params, serverUrl }) {
       tabId: tab.id,
     });
   });
+}
+
+async function closeFlowTabs() {
+  const tabs = await chrome.tabs.query({ url: ["https://labs.google/*"] });
+  const flowTabIds = tabs
+    .filter((t) => (t.url || "").includes("/fx/vi/tools/flow"))
+    .map((t) => t.id)
+    .filter((id) => Number.isInteger(id));
+
+  for (const id of flowTabIds) {
+    await detachDebugger(id).catch(() => {});
+  }
+
+  if (flowTabIds.length > 0) {
+    await chrome.tabs.remove(flowTabIds).catch(() => {});
+  }
+}
+
+async function runTaskWithRestart(payload) {
+  const resolvedServerUrl = (payload.serverUrl || "http://localhost:3000").replace(
+    /\/$/,
+    "",
+  );
+  const maxRestarts = Math.max(
+    1,
+    Number.parseInt(payload?.params?.maxSessionRestarts ?? 12, 10) || 12,
+  );
+  const proxyCandidates = getProxyCandidates(payload?.params || {});
+  let proxyCursor = -1;
+  let reloadDoneAfterRetryExhausted = false;
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= maxRestarts + 1; attempt += 1) {
+    try {
+      if (!payload.params) payload.params = {};
+      const progress = taskProgressStore.get(payload.taskId);
+      if (
+        payload.type === "text-to-image" &&
+        progress &&
+        Number.isInteger(progress.nextIndex) &&
+        progress.nextIndex > 0
+      ) {
+        payload.params.resumeFromIndex = progress.nextIndex;
+      }
+
+      if (attempt > 1) {
+        const resumeAt = Number.isInteger(payload.params.resumeFromIndex)
+          ? payload.params.resumeFromIndex + 1
+          : 1;
+        await postAgentLog(
+          resolvedServerUrl,
+          payload.taskId,
+          `Auto resume after restart: attempt ${attempt}/${maxRestarts + 1}, resume at prompt ${resumeAt}`,
+        );
+      }
+      const result = await runTask(payload);
+      taskProgressStore.delete(payload.taskId);
+      return result;
+    } catch (err) {
+      lastError = err;
+      if (!isRetryableThrottleError(err)) throw err;
+      if (attempt > maxRestarts) break;
+
+      const msg = String(err?.message || err || "").toLowerCase();
+      if (!payload.params) payload.params = {};
+      const latestProjectId = await captureLatestProjectIdFromOpenTabs().catch(() => "");
+      if (latestProjectId) payload.params.projectId = latestProjectId;
+
+      if (msg.includes("retry-exhausted-3")) {
+        if (!reloadDoneAfterRetryExhausted) {
+          reloadDoneAfterRetryExhausted = true;
+          await postAgentLog(
+            resolvedServerUrl,
+            payload.taskId,
+            `Retry quá 3 lần. Reload lại đúng project hiện tại và resume prompt lỗi (${attempt}/${maxRestarts}).`,
+          );
+          await restartFlowSessionNow(payload.params || {});
+          await sleep(5000);
+          continue;
+        }
+
+        if (proxyCandidates.length > 0) {
+          proxyCursor = (proxyCursor + 1) % proxyCandidates.length;
+          const nextProxy = proxyCandidates[proxyCursor];
+          await enableFixedProxy(nextProxy);
+          await postAgentLog(
+            resolvedServerUrl,
+            payload.taskId,
+            `Sau reload vẫn lỗi. Đổi proxy ${proxyCursor + 1}/${proxyCandidates.length}: ${nextProxy.host}:${nextProxy.port}`,
+          );
+        } else {
+          await postAgentLog(
+            resolvedServerUrl,
+            payload.taskId,
+            "Sau reload vẫn lỗi nhưng không có proxy hợp lệ để xoay vòng.",
+          );
+        }
+        await restartFlowSessionNow(payload.params || {});
+        await sleep(7000);
+        continue;
+      }
+
+      await postAgentLog(
+        resolvedServerUrl,
+        payload.taskId,
+        `Detected 400/403/429/captcha. Restart browser session and auto-continue (${attempt}/${maxRestarts}).`,
+      );
+      await restartFlowSessionNow(payload.params || {});
+      const restartBackoffMs = Math.min(180000, 15000 * attempt);
+      await sleep(restartBackoffMs);
+    }
+  }
+
+  throw new Error(
+    `Restarted ${maxRestarts} times but still hit 400/403/429/captcha. Last error: ${lastError?.message || "unknown"}`,
+  );
 }
 
 async function ensureFlowContentScript(tabId, timeout = 120000) {

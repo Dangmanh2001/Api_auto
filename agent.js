@@ -31,6 +31,40 @@ const POLL_INTERVAL = 3000;
 const rnd = (min, max) => Math.random() * (max - min) + min;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+function normalizeRenderCount(value) {
+  if (value === undefined || value === null) return "x1";
+  const raw = String(value).trim().toLowerCase();
+  if (/^x[1-4]$/.test(raw)) return raw;
+  if (/^[1-4]$/.test(raw)) return `x${raw}`;
+  return "x1";
+}
+
+function getProjectIdFromParams(params = {}) {
+  if (params?.projectId) return String(params.projectId);
+  const fromUrl = String(params?.projectUrl || params?.flowUrl || "");
+  const match = fromUrl.match(/\/project\/([a-f0-9-]+)/i);
+  return match?.[1] || "";
+}
+
+function buildFlowUrl(params = {}) {
+  const projectId = getProjectIdFromParams(params);
+  if (projectId) return `https://labs.google/fx/vi/tools/flow/project/${projectId}`;
+  return "https://labs.google/fx/vi/tools/flow";
+}
+
+function isRetryableFlowError(err) {
+  const msg = String(err?.message || err || "").toLowerCase();
+  return (
+    msg.includes("400") ||
+    msg.includes("403") ||
+    msg.includes("429") ||
+    msg.includes("captcha") ||
+    msg.includes("recaptcha") ||
+    msg.includes("unusual traffic") ||
+    msg.includes("restart requested")
+  );
+}
+
 function findChrome() {
   const paths = [
     "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
@@ -230,6 +264,222 @@ async function setupPage(page, aspectRatio, modelType, mode = "Khung hình") {
     await page.click("button.flow_tab_slider_trigger::-p-text(x1)");
   } catch {
     console.log("Có lỗi setup, tiếp tục...");
+  }
+}
+
+async function setupImagePage(page, params) {
+  const { aspectRatio, modelType } = params;
+  const renderCount = normalizeRenderCount(params.renderCount);
+
+  await page.goto(buildFlowUrl(params), {
+    waitUntil: "networkidle2",
+    timeout: 60000,
+  });
+  if (page.url().includes("accounts.google.com")) {
+    console.log("Chua login - vui long dang nhap thu cong trong Chrome...");
+    await page.waitForFunction(
+      () => !window.location.href.includes("accounts.google.com"),
+      { timeout: 5 * 60 * 1000 },
+    );
+  }
+
+  await page.waitForFunction(
+    () =>
+      [...document.querySelectorAll("button")].some((btn) =>
+        btn.textContent?.includes("Du an moi"),
+      ),
+    { timeout: 60000 },
+  );
+  await page.evaluate(() => {
+    const btn = [...document.querySelectorAll("button")].find((b) =>
+      b.textContent?.includes("Du an moi"),
+    );
+    if (btn) {
+      btn.scrollIntoView({ block: "center" });
+      btn.click();
+    }
+  });
+  await sleep(600);
+
+  try {
+    await page
+      .locator('xpath///button[.//span[text()="Tao"]]/preceding-sibling::button')
+      .click()
+      .catch(() => {});
+    await sleep(rnd(800, 1500));
+    await page.click('button.flow_tab_slider_trigger[aria-controls*="IMAGE"]');
+    await sleep(rnd(1000, 2000));
+
+    await clickAndVerify(
+      page,
+      `xpath///button[contains(., '${aspectRatio}')]`,
+      "Chon khung hinh",
+    );
+    await sleep(rnd(1200, 2000));
+
+    const dropdownBtn =
+      "xpath///button[@aria-haspopup='menu' and .//i[text()='arrow_drop_down']]";
+    await page.waitForSelector(dropdownBtn, { visible: true });
+    await page.click(dropdownBtn);
+    await page.waitForSelector("div[role='menu'][data-state='open']", {
+      visible: true,
+    });
+    await sleep(rnd(500, 1000));
+    const optionXpath = `xpath///div[@role='menuitem']//span[contains(text(), '${modelType}')]`;
+    await page.waitForSelector(optionXpath, { visible: true });
+    await page.click(optionXpath);
+    await sleep(rnd(1000, 2000));
+
+    await page.waitForFunction(
+      (target) =>
+        [...document.querySelectorAll("button")].some(
+          (b) => b.textContent?.trim().toLowerCase() === target,
+        ),
+      { timeout: 15000 },
+      renderCount,
+    );
+    await page.evaluate((target) => {
+      const btn = [...document.querySelectorAll("button")].find(
+        (b) => b.textContent?.trim().toLowerCase() === target,
+      );
+      if (btn) btn.click();
+    }, renderCount);
+    await sleep(rnd(500, 1000));
+  } catch {
+    console.log("Setup image loi nho, tiep tuc...");
+  }
+}
+
+async function submitImageRender(page) {
+  await page.waitForFunction(() => {
+    const btn = [...document.querySelectorAll("button")].find((b) => {
+      const icon = b.querySelector("i")?.textContent?.trim();
+      const text = (b.textContent || "").trim();
+      return (
+        icon === "arrow_forward" &&
+        /tao|create|generate/i.test(text) &&
+        b.getAttribute("aria-haspopup") !== "menu"
+      );
+    });
+    return (
+      !!btn &&
+      !btn.disabled &&
+      btn.getAttribute("aria-disabled") !== "true"
+    );
+  }, { timeout: 20000 });
+
+  await page.evaluate(() => {
+    const btn = [...document.querySelectorAll("button")].find((b) => {
+      const icon = b.querySelector("i")?.textContent?.trim();
+      const text = (b.textContent || "").trim();
+      return (
+        icon === "arrow_forward" &&
+        /tao|create|generate/i.test(text) &&
+        b.getAttribute("aria-haspopup") !== "menu"
+      );
+    });
+    if (btn) btn.click();
+  });
+}
+
+async function waitForImageDone(page, previousTopSignature, netState) {
+  const startTime = Date.now();
+  const TIMEOUT_MS = 10 * 60 * 1000;
+  let stableCount = 0;
+
+  while (true) {
+    if (netState.shouldRestart) {
+      throw new Error(`restart requested: ${netState.reason || "network"}`);
+    }
+    await sleep(rnd(2500, 5000));
+
+    const snapshot = await page.evaluate((prevSig) => {
+      const bodyText = (document.body?.innerText || "").toLowerCase();
+      const hasCaptcha =
+        bodyText.includes("captcha") ||
+        bodyText.includes("recaptcha") ||
+        bodyText.includes("unusual traffic") ||
+        bodyText.includes("khong thanh cong");
+
+      const retryBtns = [...document.querySelectorAll("button")].filter((b) => {
+        const t = b.textContent || "";
+        return t.includes("Thu lai") || b.querySelector("i")?.textContent?.trim() === "refresh";
+      });
+
+      const items = [...document.querySelectorAll("[data-item-index]")]
+        .map((el) => ({ el, rect: el.getBoundingClientRect() }))
+        .filter((item) => item.rect.width > 0 && item.rect.height > 0 && item.rect.bottom > 0)
+        .sort((a, b) => (a.rect.top !== b.rect.top ? a.rect.top - b.rect.top : a.rect.left - b.rect.left));
+      const topTile = items.length ? items[0].el : null;
+
+      const isBusyGlobal =
+        !!document.querySelector('[class*="generating"], [class*="spinner"], [aria-busy="true"]') ||
+        [...document.querySelectorAll("*")]
+          .filter((el) => el.childElementCount === 0 && el.textContent)
+          .some((el) => /^\d+%$/.test(el.textContent.trim()));
+      const submitBtn = [...document.querySelectorAll("button")].find((b) => {
+        const icon = b.querySelector("i")?.textContent?.trim();
+        const text = (b.textContent || "").trim();
+        return (
+          icon === "arrow_forward" &&
+          /tao|create|generate/i.test(text) &&
+          b.getAttribute("aria-haspopup") !== "menu"
+        );
+      });
+      const composerReady =
+        !!submitBtn &&
+        !submitBtn.disabled &&
+        submitBtn.getAttribute("aria-disabled") !== "true" &&
+        !isBusyGlobal;
+
+      if (!topTile) {
+        return { hasCaptcha, retryCount: retryBtns.length, noTile: true, composerReady };
+      }
+
+      const index = topTile.getAttribute("data-item-index") || "";
+      const text = topTile.textContent?.trim() || "";
+      const media =
+        topTile.querySelector("video")?.getAttribute("src") ||
+        topTile.querySelector("img")?.getAttribute("src") ||
+        "";
+      const signature = `${index}::${text}::${media}`;
+      const hasBusy =
+        !!topTile.querySelector('[class*="generating"], [class*="spinner"], [aria-busy="true"]') ||
+        [...topTile.querySelectorAll("*")]
+          .filter((el) => el.childElementCount === 0 && el.textContent)
+          .some((el) => /^\d+%$/.test(el.textContent.trim()));
+
+      return {
+        hasCaptcha,
+        retryCount: retryBtns.length,
+        noTile: false,
+        signature,
+        unchanged: !!prevSig && signature === prevSig,
+        isComplete: !hasBusy && retryBtns.length === 0,
+        composerReady,
+      };
+    }, previousTopSignature);
+
+    if (Date.now() - startTime > TIMEOUT_MS) {
+      throw new Error("restart requested: image wait timeout");
+    }
+    if (snapshot.hasCaptcha) throw new Error("restart requested: captcha");
+    if (snapshot.retryCount > 0) throw new Error("restart requested: retry button");
+    if (snapshot.noTile) {
+      if (snapshot.composerReady) return;
+      continue;
+    }
+    if (snapshot.unchanged) {
+      stableCount = 0;
+      continue;
+    }
+    if (!snapshot.isComplete) {
+      stableCount = 0;
+      continue;
+    }
+    if (snapshot.composerReady) return;
+    stableCount += 1;
+    if (stableCount >= 3) return;
   }
 }
 
@@ -549,6 +799,106 @@ async function runIngredientsToVideo(params, log) {
     }
   } finally {
     await browser.close().catch(() => {});
+  }
+}
+
+async function runTextToImage(params, log) {
+  const { promptList = [], batchSize } = params;
+  if (!Array.isArray(promptList) || promptList.length === 0) {
+    throw new Error("Thieu promptList cho text-to-image");
+  }
+
+  const maxRestarts = 3;
+  let restarts = 0;
+  let resumeFromIndex = Math.max(
+    0,
+    Number.parseInt(params.resumeFromIndex ?? 0, 10) || 0,
+  );
+
+  while (true) {
+    const { browser, page } = await createBrowser();
+    const netState = { shouldRestart: false, reason: "" };
+    const onResponse = (res) => {
+      try {
+        const url = res.url();
+        if (!url.includes("flowMedia:batchGenerateImages")) return;
+        const status = res.status();
+        if (status === 400 || status === 403 || status === 429) {
+          netState.shouldRestart = true;
+          netState.reason = `http-${status}`;
+        }
+      } catch {}
+    };
+
+    try {
+      page.on("response", onResponse);
+      await setupImagePage(page, params);
+      minimizeChrome();
+      await blockEditNavigation(page);
+
+      log(
+        `Puppeteer text-to-image safe mode: batchSize=1 (yeu cau=${batchSize ?? 4})`,
+      );
+      if (resumeFromIndex > 0) {
+        log(`Resume tu prompt ${resumeFromIndex + 1}/${promptList.length}`);
+      }
+
+      for (let i = resumeFromIndex; i < promptList.length; i += 1) {
+        const prompt = promptList[i];
+        log(`Dang xu ly prompt ${i + 1}/${promptList.length}`);
+
+        const previousTopSignature = await page.evaluate(() => {
+          const items = [...document.querySelectorAll("[data-item-index]")]
+            .map((el) => ({ el, rect: el.getBoundingClientRect() }))
+            .filter((item) => item.rect.width > 0 && item.rect.height > 0 && item.rect.bottom > 0)
+            .sort((a, b) => (a.rect.top !== b.rect.top ? a.rect.top - b.rect.top : a.rect.left - b.rect.left));
+          const topTile = items.length ? items[0].el : null;
+          if (!topTile) return "";
+          const index = topTile.getAttribute("data-item-index") || "";
+          const text = topTile.textContent?.trim() || "";
+          const media =
+            topTile.querySelector("video")?.getAttribute("src") ||
+            topTile.querySelector("img")?.getAttribute("src") ||
+            "";
+          return `${index}::${text}::${media}`;
+        });
+
+        await page.waitForSelector('[role="textbox"]', {
+          visible: true,
+          timeout: 60000,
+        });
+        await humanMouseWander(page);
+        await sleep(rnd(500, 1200));
+        await humanType(page, '[role="textbox"]', prompt);
+        await sleep(rnd(800, 1800));
+
+        await submitImageRender(page);
+        log(`Submit: ${String(prompt).substring(0, 40)}...`);
+
+        await waitForImageDone(page, previousTopSignature, netState);
+        log("Hoan thanh 1 prompt");
+        resumeFromIndex = i + 1;
+        await sleep(rnd(12000, 25000));
+      }
+
+      return;
+    } catch (err) {
+      if (!isRetryableFlowError(err)) throw err;
+      if (resumeFromIndex >= promptList.length) return;
+      restarts += 1;
+      if (restarts > maxRestarts) {
+        throw new Error(
+          `Text-to-image restart qua ${maxRestarts} lan. Loi cuoi: ${err.message}`,
+        );
+      }
+      log(
+        `Restart browser (${restarts}/${maxRestarts}) do: ${err.message}. Resume tu prompt ${resumeFromIndex + 1}`,
+      );
+      await sleep(4000);
+    } finally {
+      page.off("response", onResponse);
+      await browser.close().catch(() => {});
+    }
   }
 }
 
