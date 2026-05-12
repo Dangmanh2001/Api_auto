@@ -1307,33 +1307,21 @@ async function runImageToVideo(params, log, serverUrl) {
   blockEditNavigation();
 
   async function selectImage(buttonText, fileName) {
-    await waitForCondition(() =>
-      [...document.querySelectorAll("div")].some(
-        (el) => el.textContent?.trim() === buttonText,
-      ),
-    );
-    const btn = [...document.querySelectorAll("div")].find(
-      (el) => el.textContent?.trim() === buttonText,
-    );
-    btn.click();
+    const labels = buttonText === "Bắt đầu"
+      ? ["Bắt đầu", "Start"]
+      : ["Kết thúc", "End"];
+    const slotBtn = [...document.querySelectorAll("button,div")]
+      .find((el) => labels.some((lbl) => (el.textContent || "").trim() === lbl));
+    if (!slotBtn) {
+      throw new Error(`Không tìm thấy nút slot ảnh: ${buttonText}`);
+    }
+    await realClick(slotBtn);
     log(`Đã click ${buttonText}`);
-    // ✅ THÊM ĐOẠN NÀY (click + nhập input)
-    const inputSelector = 'input[placeholder*="Tìm kiếm"]';
-
-    await waitForCondition(() => document.querySelector(inputSelector), 10000);
-
-    const input = document.querySelector(inputSelector);
-
-    input.click();
-    setNativeInputValue(input, fileName);
-
-    log(`Đã nhập tên ảnh vào ô tìm kiếm`);
     await waitForCondition(
-      () => !!document.querySelector(`img[alt="${fileName}"]`),
-      30000,
+      () => !!document.querySelector('input[placeholder*="Tìm"], input[placeholder*="Search"]'),
+      15000,
     );
-    await realClick(document.querySelector(`img[alt="${fileName}"]`));
-    log(`Đã chọn: ${fileName}`);
+    await selectImageFromPicker(fileName, log);
   }
 
   const effectiveBatchSize = resolveBatchSize(tasks.length, batchSize ?? 4);
@@ -1443,6 +1431,9 @@ async function runTextToImage(params, log) {
       log(
         `⏸️ Đã đạt giới hạn ${maxPromptsPerSession} prompt ở phiên ${sessionNo}. Tạo phiên mới để chạy tiếp...`,
       );
+      log("⏳ Chờ render xong nhóm ảnh cuối trước khi restart phiên...");
+      await waitForRenderIdle().catch(() => {});
+      await sleep(rnd(1500, 3000));
       const sessionCooldownMs = rnd(sessionCooldownMinMs, sessionCooldownMaxMs);
       log(
         `🕒 Nghỉ ${Math.round(sessionCooldownMs / 1000)}s giữa 2 phiên để giảm 403/429`,

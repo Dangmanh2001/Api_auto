@@ -1,6 +1,7 @@
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const FLOW_URL = "https://labs.google/fx/vi/tools/flow";
 const taskProgressStore = new Map();
+const taskTabStore = new Map();
 let activeProxyConfig = null;
 let proxyAuthRetryCount = 0;
 
@@ -101,11 +102,34 @@ async function postAgentLog(serverUrl, taskId, text) {
   } catch {}
 }
 
-async function restartFlowSessionNow(params = {}) {
-  await closeFlowTabs();
-  await chrome.windows
-    .create({ url: buildFlowUrl(params), focused: true })
-    .catch(() => {});
+async function restartFlowSessionNow(params = {}, preferredTabId = null) {
+  const targetUrl = buildFlowUrl(params);
+  let tab = null;
+
+  if (Number.isInteger(preferredTabId)) {
+    tab = await chrome.tabs.get(preferredTabId).catch(() => null);
+  }
+
+  if (!tab) {
+    const tabs = await chrome.tabs.query({ url: ["https://labs.google/*"] });
+    const flowTabs = tabs.filter((t) => (t.url || "").includes("/fx/vi/tools/flow"));
+    tab = flowTabs[0] || null;
+  }
+
+  if (!tab?.id) {
+    tab = await chrome.tabs.create({ url: targetUrl, active: true }).catch(() => null);
+    if (!tab?.id) return;
+  }
+
+  if ((tab.url || "").startsWith(targetUrl)) {
+    await chrome.tabs.reload(tab.id).catch(() => {});
+  } else {
+    await chrome.tabs.update(tab.id, { url: targetUrl, active: true }).catch(() => {});
+  }
+
+  await waitForTabReady(tab.id).catch(() => {});
+  await ensureFlowContentScript(tab.id).catch(() => {});
+  await keepTabActive(tab.id).catch(() => {});
 }
 
 function parseProxyEntry(entry) {
@@ -446,10 +470,27 @@ async function runTask({ taskId, type, params, serverUrl }) {
     /\/$/,
     "",
   );
-  const tab = await chrome.tabs.create({
-    url: buildFlowUrl(params),
-    active: true,
-  });
+  const taskTabId = taskTabStore.get(taskId);
+  let tab = null;
+
+  if (Number.isInteger(taskTabId)) {
+    tab = await chrome.tabs.get(taskTabId).catch(() => null);
+  }
+
+  if (!tab?.id) {
+    tab = await chrome.tabs.create({
+      url: buildFlowUrl(params),
+      active: true,
+    });
+    taskTabStore.set(taskId, tab.id);
+  } else {
+    const targetUrl = buildFlowUrl(params);
+    if ((tab.url || "") !== targetUrl) {
+      await chrome.tabs.update(tab.id, { url: targetUrl, active: true }).catch(() => {});
+    } else {
+      await chrome.tabs.update(tab.id, { active: true }).catch(() => {});
+    }
+  }
 
   await waitForTabReady(tab.id);
   await ensureFlowContentScript(tab.id);
@@ -548,6 +589,7 @@ async function runTaskWithRestart(payload) {
       }
       const result = await runTask(payload);
       taskProgressStore.delete(payload.taskId);
+      taskTabStore.delete(payload.taskId);
       return result;
     } catch (err) {
       lastError = err;
@@ -567,7 +609,10 @@ async function runTaskWithRestart(payload) {
             payload.taskId,
             `Retry quá 3 lần. Reload lại đúng project hiện tại và resume prompt lỗi (${attempt}/${maxRestarts}).`,
           );
-          await restartFlowSessionNow(payload.params || {});
+          await restartFlowSessionNow(
+            payload.params || {},
+            taskTabStore.get(payload.taskId) ?? null,
+          );
           await sleep(5000);
           continue;
         }
@@ -588,7 +633,10 @@ async function runTaskWithRestart(payload) {
             "Sau reload vẫn lỗi nhưng không có proxy hợp lệ để xoay vòng.",
           );
         }
-        await restartFlowSessionNow(payload.params || {});
+        await restartFlowSessionNow(
+          payload.params || {},
+          taskTabStore.get(payload.taskId) ?? null,
+        );
         await sleep(7000);
         continue;
       }
@@ -598,7 +646,10 @@ async function runTaskWithRestart(payload) {
         payload.taskId,
         `Detected 400/403/429/captcha. Restart browser session and auto-continue (${attempt}/${maxRestarts}).`,
       );
-      await restartFlowSessionNow(payload.params || {});
+      await restartFlowSessionNow(
+        payload.params || {},
+        taskTabStore.get(payload.taskId) ?? null,
+      );
       const restartBackoffMs = Math.min(180000, 15000 * attempt);
       await sleep(restartBackoffMs);
     }
