@@ -451,18 +451,32 @@ function findPickerBtn() {
   return [...document.querySelectorAll("button")].find(
     (b) =>
       [...b.querySelectorAll("span")].some(
-        (s) => s.textContent?.trim() === "Tạo",
+        (s) => {
+          const t = (s.textContent || "").trim();
+          return t === "Tạo" || t === "Create";
+        },
       ) && b.querySelector("i")?.textContent?.trim() !== "arrow_forward",
   );
 }
 
 async function selectImageFromPicker(name, log) {
-  await waitForCondition(() => !!findPickerBtn(), 15000);
-  await realClick(findPickerBtn());
-  log(`Đã click picker Tạo`);
-  await sleep(rnd(400, 700));
-
-  const searchInput = await waitFor('input[placeholder*="Tìm kiếm"]', 10000);
+  const searchSelector =
+    'input[placeholder*="Tìm kiếm"], input[placeholder*="Tìm"], input[placeholder*="Search"]';
+  let searchInput = document.querySelector(searchSelector);
+  if (!searchInput) {
+    // Giống ingredients: chỉ mở picker khi search chưa hiện.
+    await waitForCondition(() => !!findPickerBtn(), 30000, {
+      throwOnTimeout: true,
+      label: "findPickerBtn",
+    });
+    const pickerBtn = findPickerBtn();
+    if (!pickerBtn) throw new Error("Không tìm thấy nút picker Tạo/Create");
+    await realClick(pickerBtn);
+    log(`Đã click picker Tạo`);
+    await sleep(rnd(700, 1300));
+    searchInput = await waitFor(searchSelector, 30000);
+  }
+  if (!searchInput) throw new Error("Không tìm thấy ô tìm ảnh trong picker");
   searchInput.click();
   await sleep(200);
   setNativeInputValue(searchInput, name);
@@ -474,7 +488,8 @@ async function selectImageFromPicker(name, log) {
         const alt = img.getAttribute("alt") || "";
         return alt === name || alt.includes(name);
       }),
-    15000,
+    30000,
+    { throwOnTimeout: true, label: `picker-image-match:${name}` },
   );
 
   const img = [...document.querySelectorAll("img")].find((node) => {
@@ -1303,6 +1318,10 @@ async function runTextToVideo(params, log) {
 async function runImageToVideo(params, log, serverUrl) {
   const { aspectRatio, modelType, tasks, batchSize } = params;
   const renderCount = normalizeRenderCount(params.renderCount);
+  const targetItemIntervalMs = Math.max(
+    3000,
+    Number.parseInt(params.itemIntervalMs ?? 5000, 10) || 5000,
+  );
   await setupPage(aspectRatio, modelType, "Khung hình", renderCount);
   blockEditNavigation();
 
@@ -1317,14 +1336,11 @@ async function runImageToVideo(params, log, serverUrl) {
     }
     await realClick(slotBtn);
     log(`Đã click ${buttonText}`);
-    await waitForCondition(
-      () => !!document.querySelector('input[placeholder*="Tìm"], input[placeholder*="Search"]'),
-      15000,
-    );
     await selectImageFromPicker(fileName, log);
   }
 
   const effectiveBatchSize = resolveBatchSize(tasks.length, batchSize ?? 4);
+  let lastSubmitAt = 0;
   for (let i = 0; i < tasks.length; i += effectiveBatchSize) {
     const batch = tasks.slice(i, i + effectiveBatchSize);
     const groupNumber = Math.floor(i / effectiveBatchSize) + 1;
@@ -1353,12 +1369,20 @@ async function runImageToVideo(params, log, serverUrl) {
       });
 
       await submitRenderButton(log, task.prompt);
-      await humanPause([6000, 13000], {
-        microPauseChance: 0.35,
-        microPauseRange: [800, 2000],
-        longPauseChance: 0.18,
-        longPauseRange: [12000, 24000],
+      lastSubmitAt = Date.now();
+      await humanPause([900, 1800], {
+        microPauseChance: 0.15,
+        microPauseRange: [150, 350],
+        longPauseChance: 0,
+        longPauseRange: [0, 0],
       });
+
+      const elapsed = Date.now() - lastSubmitAt;
+      if (elapsed < targetItemIntervalMs) {
+        const waitMs = targetItemIntervalMs - elapsed;
+        log(`⏱️ Điều tốc item: chờ ${Math.round(waitMs / 1000)}s để giữ nhịp ~${Math.round(targetItemIntervalMs / 1000)}s/item`);
+        await sleep(waitMs);
+      }
     }
 
     await waitForVideos(batch.length, log, previousTopSignature);

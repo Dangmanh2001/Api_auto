@@ -102,7 +102,8 @@ async function postAgentLog(serverUrl, taskId, text) {
   } catch {}
 }
 
-async function restartFlowSessionNow(params = {}, preferredTabId = null) {
+async function restartFlowSessionNow(params = {}, preferredTabId = null, options = {}) {
+  const { viaFlowHome = true } = options;
   const targetUrl = buildFlowUrl(params);
   let tab = null;
 
@@ -121,7 +122,12 @@ async function restartFlowSessionNow(params = {}, preferredTabId = null) {
     if (!tab?.id) return;
   }
 
-  if ((tab.url || "").startsWith(targetUrl)) {
+  if (viaFlowHome) {
+    await chrome.tabs.update(tab.id, { url: FLOW_URL, active: true }).catch(() => {});
+    await waitForTabReady(tab.id).catch(() => {});
+    await sleep(1200);
+    await chrome.tabs.update(tab.id, { url: targetUrl, active: true }).catch(() => {});
+  } else if ((tab.url || "").startsWith(targetUrl)) {
     await chrome.tabs.reload(tab.id).catch(() => {});
   } else {
     await chrome.tabs.update(tab.id, { url: targetUrl, active: true }).catch(() => {});
@@ -612,6 +618,7 @@ async function runTaskWithRestart(payload) {
           await restartFlowSessionNow(
             payload.params || {},
             taskTabStore.get(payload.taskId) ?? null,
+            { viaFlowHome: true },
           );
           await sleep(5000);
           continue;
@@ -636,6 +643,7 @@ async function runTaskWithRestart(payload) {
         await restartFlowSessionNow(
           payload.params || {},
           taskTabStore.get(payload.taskId) ?? null,
+          { viaFlowHome: true },
         );
         await sleep(7000);
         continue;
@@ -649,6 +657,7 @@ async function runTaskWithRestart(payload) {
       await restartFlowSessionNow(
         payload.params || {},
         taskTabStore.get(payload.taskId) ?? null,
+        { viaFlowHome: true },
       );
       const restartBackoffMs = Math.min(180000, 15000 * attempt);
       await sleep(restartBackoffMs);
